@@ -8,6 +8,7 @@ import torch
 from torch.optim import Adam
 
 from spinup.algos.a2c import core
+from spinup.constants import DEVICE
 from spinup.core.bellman import calculate_returns
 from spinup.utils import nn_utils
 from spinup.utils.evaluate import evaluate_agent
@@ -71,7 +72,7 @@ def train(env,
     ac = model
     ac_targ = deepcopy(ac)
 
-    test_agent = core.Agent(ac.actor, device)
+    test_agent = core.Agent(ac.actor)
 
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
     for p in ac_targ.parameters():
@@ -240,8 +241,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
     env = gym.make(args.env)
 
     from spinup.utils.run_utils import setup_logger_kwargs
@@ -261,7 +260,7 @@ if __name__ == '__main__':
 
     if saved_model_file:
         assert saved_model_file.exists()
-        model = torch.load(saved_model_file, map_location=device)
+        model = torch.load(saved_model_file, map_location=DEVICE)
         for p in model.parameters():
             p.requires_grad_()
         print("Loaded model from: ", saved_model_file)
@@ -285,5 +284,5 @@ if __name__ == '__main__':
         test_every=args.test_every,
         num_test_episodes=args.num_test_episodes,
         test_episode_len_limit=args.test_episode_len_limit,
-        device=device,
+        device=DEVICE,
     )

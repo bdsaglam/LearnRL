@@ -1,5 +1,4 @@
-import torch
-
+from spinup.constants import DEVICE
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.experiment_utils import load_env_and_agent
 
@@ -15,11 +14,10 @@ if __name__ == '__main__':
     parser.add_argument('--norender', '-nr', action='store_true')
     args = parser.parse_args()
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    print("Device: ", DEVICE)
 
     env, agent = load_env_and_agent(args.experiment_folder,
-                                    args.itr if args.itr >= 0 else 'last',
-                                    device=device)
+                                    args.itr if args.itr >= 0 else 'last')
 
     evaluate_agent(env,
                    agent,

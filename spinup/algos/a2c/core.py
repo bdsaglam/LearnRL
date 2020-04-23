@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
+from spinup.constants import DEVICE
 from spinup.core.api import IAgent, IActorCritic
 from spinup.utils import nn_utils
 
@@ -86,16 +87,15 @@ class ActorCritic(nn.Module, IActorCritic):
 
 
 class Agent(IAgent):
-    def __init__(self, actor: [nn.Module], device=torch.device("cpu")):
+    def __init__(self, actor: [nn.Module]):
         super().__init__()
-        self.actor = actor.to(device)
-        self.device = device
+        self.actor = actor.to(DEVICE)
 
     def reset(self):
         pass
 
     def act(self, obs, deterministic=False):
-        feature_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+        feature_tensor = torch.tensor(obs, dtype=torch.float32).to(DEVICE)
         with torch.no_grad():
             dist = self.actor(feature_tensor)
             if deterministic:

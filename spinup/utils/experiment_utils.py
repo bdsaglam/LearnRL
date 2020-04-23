@@ -4,10 +4,11 @@ import pathlib
 import joblib
 import torch
 
+from spinup.constants import DEVICE
 from spinup.utils.general_utils import get_latest_file_iteration
 
 
-def load_env_and_agent(experiment_folder, iteration='last', device=torch.device('cpu')):
+def load_env_and_agent(experiment_folder, iteration='last'):
     """
     Load a policy from save, whether it's TF or PyTorch, along with RL env.
 
@@ -40,7 +41,7 @@ def load_env_and_agent(experiment_folder, iteration='last', device=torch.device(
     except:
         env = None
 
-    agent = load_pytorch_obj(experiment_folder, itr, 'agent', device=device)
+    agent = load_pytorch_obj(experiment_folder, itr, 'agent')
     return env, agent
 
 
@@ -57,7 +58,7 @@ def get_latest_saved_file(save_dir, prefix):
     return None
 
 
-def load_pytorch_obj(experiment_folder, itr, obj_name, device=torch.device('cpu')):
+def load_pytorch_obj(experiment_folder, itr, obj_name):
     filepath = osp.join(experiment_folder, 'pyt_save', obj_name + itr + '.pt')
     print('\n\nLoading from %s.\n\n' % filepath)
-    return torch.load(filepath, map_location=device)
+    return torch.load(filepath, map_location=DEVICE)
