@@ -1,7 +1,7 @@
 import sys
 from os.path import join
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 assert sys.version_info.major == 3 and sys.version_info.minor >= 6, \
     "The Spinning Up repo is designed to work with Python 3.6 and greater." \
@@ -12,8 +12,8 @@ with open(join("spinup", "version.py")) as version_file:
 
 setup(
     name='spinup',
-    py_modules=['spinup'],
     version=0.1,
+    packages=find_packages(),
     install_requires=[
         'cloudpickle',
         'gym[atari,box2d,classic_control]',
