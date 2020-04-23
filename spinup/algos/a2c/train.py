@@ -145,7 +145,7 @@ def train(env,
         for t in range(steps_per_epoch):
             total_steps += 1
 
-            feature_tensor = torch.tensor(obs, dtype=torch.float32)
+            feature_tensor = torch.tensor(obs, dtype=torch.float32).to(device)
             dist = ac.infer_action_dist(feature_tensor)
             action = dist.sample()
             log_prob = dist.log_prob(action)
@@ -184,7 +184,7 @@ def train(env,
             # Bellman backup for Q function
             # Q(s_t,a_t) = R_t + gamma * V(s_t+1)
             with torch.no_grad():
-                feature_tensor = torch.tensor(obs, dtype=torch.float32)
+                feature_tensor = torch.tensor(obs, dtype=torch.float32).to(device)
                 next_value = ac_targ.infer_value(feature_tensor).cpu().item()
 
         batch_feature = torch.stack(feature_tensors).to(device)
