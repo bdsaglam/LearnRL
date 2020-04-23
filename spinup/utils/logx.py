@@ -212,7 +212,7 @@ class Logger:
                     # something different for your personal PyTorch project.
                     # We use a catch_warnings() context to avoid the warnings about
                     # not being able to save the source code.
-                    torch.save(obj, folder / filename)
+                    torch.save(obj.cpu(), folder / filename)
 
     def dump_tabular(self):
         """
