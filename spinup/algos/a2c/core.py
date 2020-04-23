@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
-from spinup.api import IAgent, IActorCritic
+from spinup.core.api import IAgent, IActorCritic
 from spinup.utils import nn_utils
 
 

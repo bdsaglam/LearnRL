@@ -3,7 +3,7 @@ import time
 import torch
 
 from spinup import EpochLogger
-from spinup.api.api import IAgent
+from spinup.core.api import IAgent
 
 
 def evaluate_agent(

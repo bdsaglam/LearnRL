@@ -8,20 +8,11 @@ import torch
 from torch.optim import Adam
 
 from spinup.algos.a2c import core
+from spinup.core.bellman import calculate_returns
 from spinup.utils import nn_utils
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.experiment_utils import get_latest_saved_file
 from spinup.utils.logx import EpochLogger
-
-
-def compute_returns(rewards, dones, next_value, gamma):
-    # Bellman backup for Q function
-    # Q(s_t,a_t) = R_t + gamma * V(s_t+1)
-    returns = np.zeros_like(rewards)
-    for i in reversed(range(returns.size)):
-        returns[i] = rewards[i] + gamma * (1 - dones[i]) * next_value
-        next_value = returns[i]
-    return returns
 
 
 def make_model(env, model_kwargs):
@@ -190,10 +181,10 @@ def train(env,
         batch_feature = torch.stack(feature_tensors).to(device)
         batch_log_prob = torch.stack(log_prob_tensors).unsqueeze(-1).to(device)
         batch_entropy = torch.stack(entropy_tensors).unsqueeze(-1).to(device)
-        returns = compute_returns(rewards=rewards,
-                                  dones=dones,
-                                  next_value=next_value,
-                                  gamma=gamma)
+        returns = calculate_returns(rewards=rewards,
+                                    dones=dones,
+                                    next_value=next_value,
+                                    discount_factor=gamma)
         batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(-1).to(device)
 
         update(batch_feature, batch_log_prob, batch_entropy, batch_return)
