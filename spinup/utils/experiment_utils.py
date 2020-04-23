@@ -7,7 +7,7 @@ import torch
 from spinup.utils.general_utils import get_latest_file_iteration
 
 
-def load_env_and_agent(experiment_folder, iteration='last'):
+def load_env_and_agent(experiment_folder, iteration='last', device=torch.device('cpu')):
     """
     Load a policy from save, whether it's TF or PyTorch, along with RL env.
 
@@ -40,7 +40,8 @@ def load_env_and_agent(experiment_folder, iteration='last'):
     except:
         env = None
 
-    return env, load_pytorch_obj(experiment_folder, itr, 'agent')
+    agent = load_pytorch_obj(experiment_folder, itr, 'agent', device=device)
+    return env, agent
 
 
 def get_latest_saved_file(save_dir, prefix):
@@ -56,7 +57,7 @@ def get_latest_saved_file(save_dir, prefix):
     return None
 
 
-def load_pytorch_obj(experiment_folder, itr, obj_name):
+def load_pytorch_obj(experiment_folder, itr, obj_name, device=torch.device('cpu')):
     filepath = osp.join(experiment_folder, 'pyt_save', obj_name + itr + '.pt')
     print('\n\nLoading from %s.\n\n' % filepath)
-    return torch.load(filepath)
+    return torch.load(filepath, map_location=device)

@@ -155,7 +155,7 @@ class Logger:
         All diagnostic logging is separate from this function. This function
         will save whatever is in ``state_dict``---usually just a copy of the
         environment---and the most recent parameters for the model you 
-        previously set up saving for with ``setup_tf_saver``. 
+        previously set up saving for with ``setup_tf_saver``.
 
         Call with any frequency you prefer. If you only want to maintain a
         single state and overwrite it at each call with the most recent 
@@ -212,7 +212,7 @@ class Logger:
                     # something different for your personal PyTorch project.
                     # We use a catch_warnings() context to avoid the warnings about
                     # not being able to save the source code.
-                    torch.save(obj.cpu(), folder / filename)
+                    torch.save(obj, folder / filename)
 
     def dump_tabular(self):
         """

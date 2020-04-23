@@ -240,6 +240,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
     env = gym.make(args.env)
 
     from spinup.utils.run_utils import setup_logger_kwargs
@@ -259,7 +261,7 @@ if __name__ == '__main__':
 
     if saved_model_file:
         assert saved_model_file.exists()
-        model = torch.load(saved_model_file)
+        model = torch.load(saved_model_file, map_location=device)
         for p in model.parameters():
             p.requires_grad_()
         print("Loaded model from: ", saved_model_file)
@@ -268,7 +270,6 @@ if __name__ == '__main__':
             env,
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     train(
         env=env,
