@@ -1,5 +1,7 @@
 # Where experiment outputs are saved by default:
-DEFAULT_DATA_DIR = "~/spinup-data/"
+import pathlib
+
+DEFAULT_DATA_DIR = pathlib.Path.home() / "spinup-data"
 
 # Whether to automatically insert a date and time stamp into the names of
 # save directories:
