@@ -8,7 +8,7 @@ from spinup.constants import DEVICE
 from spinup.utils.general_utils import get_latest_file_iteration
 
 
-def load_env_and_agent(experiment_folder, iteration='last'):
+def load_env_and_model(experiment_folder, iteration='last'):
     """
     Load a policy from save, whether it's TF or PyTorch, along with RL env.
 
@@ -23,7 +23,7 @@ def load_env_and_agent(experiment_folder, iteration='last'):
     # handle which epoch to load from
     if iteration == 'last':
         _, i = get_latest_file_iteration(osp.join(experiment_folder, 'pyt_save'),
-                                         pattern='agent*.pt')
+                                         pattern='model*.pt')
         if i:
             itr = '%d' % i
         else:
@@ -41,8 +41,8 @@ def load_env_and_agent(experiment_folder, iteration='last'):
     except:
         env = None
 
-    agent = load_pytorch_obj(experiment_folder, itr, 'agent')
-    return env, agent
+    model = load_pytorch_obj(experiment_folder, itr, 'model')
+    return env, model
 
 
 def get_latest_saved_file(save_dir, prefix):

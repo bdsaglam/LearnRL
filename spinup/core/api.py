@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+import torch
+
 
 class IAgent(ABC):
     @abstractmethod
@@ -11,17 +13,14 @@ class IAgent(ABC):
         pass
 
 
-class IActorCritic(ABC):
+class IAgentModel(IAgent, torch.nn.Module):
     @abstractmethod
-    def infer_value(self, feature_tensor):
-        pass
-
-    @abstractmethod
-    def infer_action_dist(self, feature_tensor):
+    def step(self, obs_tensor: torch.tensor) -> torch.tensor:
+        # takes observation tensor and returns action tensor
         pass
 
 
-class IPolicy(ABC):
+class IActorCritic(IAgentModel):
     @abstractmethod
-    def action_dist(self, obs):
+    def predict_value(self, obs_tensor: torch.tensor) -> torch.tensor:
         pass

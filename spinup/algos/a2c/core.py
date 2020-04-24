@@ -1,4 +1,3 @@
-import itertools
 from copy import deepcopy
 
 import torch
@@ -6,7 +5,7 @@ import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
 from spinup.constants import DEVICE
-from spinup.core.api import IAgent, IActorCritic
+from spinup.core.api import IAgent
 from spinup.utils import nn_utils
 
 
@@ -34,73 +33,118 @@ class MLPVFunction(nn.Module):
         return self.q(obs)
 
 
-class ActorCritic(nn.Module, IActorCritic):
-    def __init__(self, actor: nn.Module, critic: nn.Module):
+class History:
+    def __init__(self):
+        self.log_probs = []
+        self.entropy = []
+        self.v1 = []
+        self.v2 = []
+
+    def store(self, log_prob, entropy, v1, v2):
+        self.log_probs.append(log_prob)
+        self.entropy.append(entropy)
+        self.v1.append(v1)
+        self.v2.append(v2)
+
+    def data(self):
+        batch_log_probs = torch.cat(self.log_probs, 0)
+        batch_entropy = torch.cat(self.entropy, 0)
+        batch_v1 = torch.cat(self.v1, 0)
+        batch_v2 = torch.cat(self.v2, 0)
+        return batch_log_probs, batch_entropy, batch_v1, batch_v2
+
+
+class ActorCritic(nn.Module, IAgent):
+    def __init__(self, feature_extractor: nn.Module, actor: nn.Module, critic: nn.Module):
         super().__init__()
+        self.feature_extractor = feature_extractor
         self.actor = actor
         self.critic1 = critic
         self.critic2 = deepcopy(critic)
 
-    def infer_value(self, feature_tensor):
-        v1 = self.critic1(feature_tensor)
-        v2 = self.critic2(feature_tensor)
-        values = torch.min(v1, v2)
-        return values
-
-    def infer_action_dist(self, feature_tensor):
-        dist = self.actor(feature_tensor)
-        return dist
-
-    def infer_value_action_dist(self, feature_tensor):
-        return self.infer_value(feature_tensor), self.infer_action_dist(feature_tensor)
-
-    def critic_parameters(self):
-        return itertools.chain(self.critic1.parameters(), self.critic2.parameters())
-
-    def actor_parameters(self):
-        return self.actor.parameters()
-
-    def compute_loss(self, features, log_probs, entropies, returns, value_loss_coef, entropy_reg_coef):
-        v1 = self.critic1(features)
-        v2 = self.critic2(features)
-
-        # MSE loss against Bellman backup
-        loss_v1 = (returns - v1).pow(2).mean()
-        loss_v2 = (returns - v2).pow(2).mean()
-        loss_v = value_loss_coef * (loss_v1 + loss_v2)
-
-        # Useful info for logging
-        v_info = dict(V1Vals=v1.cpu().detach().numpy(),
-                      V2Vals=v2.cpu().detach().numpy())
-
-        values = torch.min(v1.detach(), v2.detach())
-        advantages = returns - values
-
-        # Entropy-regularized policy loss
-        loss_pi = 1 * (-entropy_reg_coef * entropies.mean() - (advantages * log_probs).mean())
-
-        # Useful info for logging
-        pi_info = dict(LogPi=log_probs.cpu().detach().numpy(),
-                       MeanEntropy=entropies.cpu().detach().mean().numpy())
-
-        return loss_v, v_info, loss_pi, pi_info
-
-
-class Agent(IAgent):
-    def __init__(self, actor: [nn.Module]):
-        super().__init__()
-        self.actor = actor.to(DEVICE)
+        self.train_history = History()
 
     def reset(self):
-        pass
+        self.train_history = History()
+
+    def step(self, obs_tensor):
+        feature_tensor = self.feature_extractor(obs_tensor)
+        v1 = self.critic1(feature_tensor)
+        v2 = self.critic2(feature_tensor)
+        dist = self.actor(feature_tensor)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        entropy = dist.entropy()
+
+        self.train_history.store(
+            log_prob=log_prob,
+            entropy=entropy,
+            v1=v1,
+            v2=v2,
+        )
+
+        return action
+
+    def predict_value(self, obs_tensor):
+        with torch.no_grad():
+            feature_tensor = self.feature_extractor(obs_tensor)
+            v1 = self.critic1(feature_tensor)
+            v2 = self.critic2(feature_tensor)
+            v = torch.min(v1, v2)
+        return v
+
+    def compute_loss(self, batch_return, value_loss_coef, entropy_reg_coef):
+        # all tensors have shape of (T, 1)
+        # MSE loss against Bellman backup
+        batch_log_probs, batch_entropy, batch_v1, batch_v2 = self.train_history.data()
+        loss_v1 = (batch_return - batch_v1).pow(2).mean()
+        loss_v2 = (batch_return - batch_v2).pow(2).mean()
+        loss_v = value_loss_coef * (loss_v1 + loss_v2)
+
+        # Entropy-regularized policy loss
+        batch_value = torch.min(batch_v1.detach(), batch_v2.detach())
+        batch_advantage = batch_return - batch_value
+        loss_pi = -(entropy_reg_coef * batch_entropy.mean() + (batch_advantage * batch_log_probs).mean())
+
+        # Useful info for logging
+        info = dict(
+            V1Vals=batch_v1.detach().cpu().numpy(),
+            V2Vals=batch_v2.detach().cpu().numpy(),
+            LogPi=batch_log_probs.detach().cpu().numpy(),
+            MeanEntropy=batch_entropy.detach().cpu().mean().numpy()
+        )
+        return loss_v, loss_pi, info
 
     def act(self, obs, deterministic=False):
-        feature_tensor = torch.tensor(obs, dtype=torch.float32).to(DEVICE)
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
-            dist = self.actor(feature_tensor)
+            feature = self.feature_extractor(obs_tensor)
+            dist = self.actor(feature)
             if deterministic:
                 action = dist.probs.argmax(-1)
             else:
                 action = dist.sample()
 
-        return action.cpu().numpy()
+        return action.cpu().squeeze(0).numpy()
+
+
+def make_model(env, model_kwargs):
+    obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.n
+
+    # Create actor-critic module and target networks
+    feature_dim = obs_dim
+    feature_extractor = torch.nn.Identity()
+    actor_network = MLPCategoricalActor(feature_dim, act_dim, **model_kwargs)
+    critic_network = MLPVFunction(feature_dim, **model_kwargs)
+    ac = ActorCritic(
+        feature_extractor=feature_extractor,
+        actor=actor_network,
+        critic=critic_network
+    )
+
+    # Count variables (protip: try to get a feel for how different size networks behave!)
+    var_counts = tuple(nn_utils.count_vars(module) for module in [actor_network, critic_network])
+    print('\nNumber of parameters: \t actor: %d, \t critic: %d\n' % var_counts)
+
+    return ac

@@ -7,37 +7,17 @@ import numpy as np
 import torch
 from torch.optim import Adam
 
-from spinup.algos.a2c import core
 from spinup.constants import DEVICE
 from spinup.core.bellman import calculate_returns
-from spinup.utils import nn_utils
+from spinup.examples.experimental import core
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.experiment_utils import get_latest_saved_file
 from spinup.utils.logx import EpochLogger
 
 
-def make_model(env, model_kwargs):
-    obs_dim = env.observation_space.shape[0]
-    act_dim = env.action_space.n
-
-    # Create actor-critic module and target networks
-    feature_dim = obs_dim
-    actor_network = core.MLPCategoricalActor(feature_dim, act_dim, **model_kwargs)
-    critic_network = core.MLPVFunction(feature_dim, **model_kwargs)
-    ac = core.ActorCritic(
-        actor=actor_network,
-        critic=critic_network)
-
-    # Count variables (protip: try to get a feel for how different size networks behave!)
-    var_counts = tuple(nn_utils.count_vars(module) for module in [actor_network, critic_network])
-    print('\nNumber of parameters: \t actor: %d, \t critic: %d\n' % var_counts)
-
-    return ac
-
-
 def train(env,
           test_env,
-          model,
+          model: core.ActorCritic,
           seed=0,
           steps_per_epoch=10,
           epochs=1000,
@@ -70,56 +50,62 @@ def train(env,
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.n
 
-    ac = model
-    ac_targ = deepcopy(ac)
-
-    test_agent = core.Agent(ac.actor)
-
+    # training model and target model
+    actor_critic = model
+    target_actor_critic = deepcopy(actor_critic)
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
-    for p in ac_targ.parameters():
+    for p in target_actor_critic.parameters():
         p.requires_grad = False
+    # Utilize GPU
+    actor_critic.to(device)
+    target_actor_critic.to(device)
 
     # Set up optimizers for policy and q-function
-    pi_optimizer = Adam(ac.actor_parameters(), lr=lr)
-    v_optimizer = Adam(ac.critic_parameters(), lr=lr)
+    optimizer = Adam(actor_critic.parameters(), lr=lr)
 
     # Set up model saving
-    logger.setup_pytorch_saver(ac, name='model')
-    logger.setup_pytorch_saver(test_agent, name='agent')
+    logger.setup_pytorch_saver(actor_critic, name='model')
 
-    def update(features, log_probs, entropies, returns):
-        # Super critical!
-        v_optimizer.zero_grad()
-        pi_optimizer.zero_grad()
+    def update(rewards, dones, last_obs):
+        # Update
+        if dones[-1]:
+            next_value = 0.0
+        else:
+            obs_tensor = torch.tensor(last_obs, dtype=torch.float32).unsqueeze(0).to(device)
+            next_value = target_actor_critic.predict_value(obs_tensor).cpu().item()
+
+        returns = calculate_returns(rewards=np.array(rewards),
+                                    dones=np.array(dones),
+                                    next_value=next_value,
+                                    discount_factor=gamma)
+        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(-1).to(device)
+
+        # Super critical!!
+        optimizer.zero_grad()
+
         # Compute value and policy losses
-        loss_v, v_info, loss_pi, pi_info = ac.compute_loss(features=features,
-                                                           log_probs=log_probs,
-                                                           entropies=entropies,
-                                                           returns=returns,
-                                                           value_loss_coef=value_loss_coef,
-                                                           entropy_reg_coef=entropy_reg_coef)
+        loss_v, loss_pi, info = actor_critic.compute_loss(batch_return=batch_return,
+                                                          value_loss_coef=value_loss_coef,
+                                                          entropy_reg_coef=entropy_reg_coef)
         loss = loss_v + loss_pi
         loss.backward()
 
         # Optimize
-        v_optimizer.step()
-        pi_optimizer.step()
+        optimizer.step()
 
-        # Record things
-        logger.store(LossV=loss_v.cpu().detach().item(), **v_info)
-        logger.store(LossPi=loss_pi.cpu().detach().item(), **pi_info)
+        # Log losses and info
+        logger.store(LossV=loss_v.detach().cpu().item())
+        logger.store(LossPi=loss_pi.detach().cpu().item())
+        logger.store(**info)
 
         # Finally, update target networks by polyak averaging.
         with torch.no_grad():
-            for p, p_targ in zip(ac.parameters(), ac_targ.parameters()):
+            for p, p_targ in zip(actor_critic.parameters(), target_actor_critic.parameters()):
                 # NB: We use an in-place operations "mul_", "add_" to update target
                 # params, as opposed to "mul" and "add", which would make new tensors.
                 p_targ.data.mul_(polyak)
                 p_targ.data.add_((1 - polyak) * p.data)
 
-    # Utilize GPU
-    ac.to(device)
-    ac_targ.to(device)
     # Prepare for interaction with environment
     start_time = time.time()
     # Main loop: collect experience in env and update/log each epoch
@@ -131,29 +117,22 @@ def train(env,
     episode_length = 0
     logger.store(EpRet=0, EpLen=0)
     for epoch in range(epochs):
-        feature_tensors = []
+        actor_critic.reset()
         rewards = []
         dones = []
-        log_prob_tensors = []
-        entropy_tensors = []
         for t in range(steps_per_epoch):
             total_steps += 1
 
-            feature_tensor = torch.tensor(obs, dtype=torch.float32).to(device)
-            dist = ac.infer_action_dist(feature_tensor)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-            entropy = dist.entropy()
+            # Get action from the model
+            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device)
+            action = actor_critic.step(obs_tensor)
 
             # Step the env
-            obs2, reward, done, _ = env.step(action.detach().cpu().numpy())
+            obs2, reward, done, _ = env.step(action.detach().cpu().item())
             episode_return += reward
             episode_length += 1
 
             # Store experience to buffer
-            feature_tensors.append(feature_tensor)
-            log_prob_tensors.append(log_prob)
-            entropy_tensors.append(entropy)
             rewards.append(reward)
             dones.append(done)
 
@@ -171,26 +150,7 @@ def train(env,
                 episode_length = 0
                 break
 
-        # Update
-        if dones[-1]:
-            next_value = 0.0
-        else:
-            # Bellman backup for Q function
-            # Q(s_t,a_t) = R_t + gamma * V(s_t+1)
-            with torch.no_grad():
-                feature_tensor = torch.tensor(obs, dtype=torch.float32).to(device)
-                next_value = ac_targ.infer_value(feature_tensor).cpu().item()
-
-        batch_feature = torch.stack(feature_tensors).to(device)
-        batch_log_prob = torch.stack(log_prob_tensors).unsqueeze(-1).to(device)
-        batch_entropy = torch.stack(entropy_tensors).unsqueeze(-1).to(device)
-        returns = calculate_returns(rewards=np.array(rewards),
-                                    dones=np.array(dones),
-                                    next_value=next_value,
-                                    discount_factor=gamma)
-        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(-1).to(device)
-
-        update(batch_feature, batch_log_prob, batch_entropy, batch_return)
+        update(rewards=rewards, dones=dones, last_obs=obs)
 
         # End of epoch handling
         if epoch % log_every == 0:
@@ -201,7 +161,7 @@ def train(env,
             logger.log_tabular('V1Vals', with_min_and_max=True)
             logger.log_tabular('V2Vals', with_min_and_max=True)
             logger.log_tabular('LogPi', with_min_and_max=True)
-            logger.log_tabular('MeanEntropy', with_min_and_max=True)
+            logger.log_tabular('MeanEntropy', average_only=True)
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossV', average_only=True)
             logger.log_tabular('TotalEnvInteracts', total_steps)
@@ -211,7 +171,7 @@ def train(env,
         if epoch % test_every == 0:
             # Test the performance of the deterministic version of the agent.
             evaluate_agent(env=test_env,
-                           agent=test_agent,
+                           agent=actor_critic,
                            deterministic=False,
                            num_episodes=num_test_episodes,
                            episode_len_limit=test_episode_len_limit,
@@ -268,7 +228,7 @@ if __name__ == '__main__':
             p.requires_grad_()
         print("Loaded model from: ", saved_model_file)
     else:
-        model = make_model(
+        model = core.make_model(
             env,
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )

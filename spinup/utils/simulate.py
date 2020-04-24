@@ -1,6 +1,6 @@
 from spinup.constants import DEVICE
 from spinup.utils.evaluate import evaluate_agent
-from spinup.utils.experiment_utils import load_env_and_agent
+from spinup.utils.experiment_utils import load_env_and_model
 
 if __name__ == '__main__':
     import argparse
@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     print("Device: ", DEVICE)
 
-    env, agent = load_env_and_agent(args.experiment_folder,
+    env, agent = load_env_and_model(args.experiment_folder,
                                     args.itr if args.itr >= 0 else 'last')
 
     evaluate_agent(env,
