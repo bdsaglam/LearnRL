@@ -1,6 +1,6 @@
 import gym
 
-from spinup.api.api import IAgent
+from spinup.core.api import IAgent
 from spinup.utils.evaluate import evaluate_agent
 
 

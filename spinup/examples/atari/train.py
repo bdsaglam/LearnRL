@@ -39,13 +39,14 @@ def make_model(env, model_kwargs):
 def train(env,
           test_env,
           model,
+          device,
           seed=0,
           steps_per_epoch=10,
           epochs=1000,
           gamma=0.99,
           polyak=0.995,
           lr=1e-3,
-          value_loss_coef=0.1,
+          value_loss_coef=1,
           entropy_reg_coef=0.2,
           save_every=100,
           log_every=100,
@@ -53,8 +54,6 @@ def train(env,
           test_every=100,
           num_test_episodes=5,
           test_episode_len_limit=None,
-          save_freq=1,
-          device=torch.device("cpu"),
           ):
     logger = EpochLogger(**logger_kwargs)
     config = locals()
@@ -292,6 +291,7 @@ if __name__ == '__main__':
         env=env,
         test_env=gym.make(args.env),
         model=model,
+        device=DEVICE,
         seed=args.seed,
         gamma=args.gamma,
         value_loss_coef=args.value_loss_coef,
@@ -303,5 +303,4 @@ if __name__ == '__main__':
         test_every=args.test_every,
         num_test_episodes=args.num_test_episodes,
         test_episode_len_limit=args.test_episode_len_limit,
-        device=DEVICE,
     )
