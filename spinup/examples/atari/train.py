@@ -56,6 +56,8 @@ def train(env,
           test_episode_len_limit=None,
           ):
     logger = EpochLogger(**logger_kwargs)
+    logger.log(f'Device: {device}', color='blue')
+
     config = locals()
     del config['env']
     del config['test_env']
@@ -63,8 +65,6 @@ def train(env,
     del config['logger']
     config['env_name'] = env.spec.id
     logger.save_config(config)
-
-    logger.log(f'Device: {device}', color='blue')
 
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -111,8 +111,8 @@ def train(env,
         pi_optimizer.step()
 
         # Record things
-        logger.store(LossV=loss_v.cpu().detach().item(), **v_info)
-        logger.store(LossPi=loss_pi.cpu().detach().item(), **pi_info)
+        logger.store(LossV=loss_v.detach().cpu().item(), **v_info)
+        logger.store(LossPi=loss_pi.detach().cpu().item(), **pi_info)
 
         # Finally, update target networks by polyak averaging.
         with torch.no_grad():
