@@ -1,5 +1,6 @@
-/data
-/spinup.egg-info
+run.sh
+
+# PyCharm files
 .idea
 
 # Byte-compiled / optimized / DLL files

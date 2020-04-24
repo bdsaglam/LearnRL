@@ -25,7 +25,7 @@ def evaluate_agent(
             episode_len_limit = env.spec.max_episode_steps
         else:
             episode_len_limit = 1000
-
+    episode_info = []
     for _ in range(num_episodes):
         obs = env.reset()
         agent.reset()
@@ -42,8 +42,12 @@ def evaluate_agent(
             obs, reward, done, _ = env.step(action)
             episode_return += reward
             t += 1
+        episode_info.append((t, episode_return))
         logger.store(TestEpRet=episode_return, TestEpLen=t)
 
-    logger.log_tabular('TestEpRet', with_min_and_max=True)
+    logger.log_tabular('EpisodeLimit', episode_len_limit)
     logger.log_tabular('TestEpLen', with_min_and_max=True)
+    logger.log_tabular('TestEpRet', with_min_and_max=True)
     logger.dump_tabular()
+
+    return episode_info

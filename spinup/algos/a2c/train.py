@@ -20,6 +20,7 @@ def train(env,
           test_env,
           model: IActorCritic,
           seed=0,
+          device=torch.device("cpu"),
           epochs=1000,
           steps_per_epoch=10,
           episode_len_limit=1000,
@@ -28,15 +29,16 @@ def train(env,
           learning_rate=1e-3,
           value_loss_coef=1,
           policy_loss_coef=1,
-          entropy_reg_coef=1,
+          entropy_loss_coef=1,
           save_every=100,
-          log_every=100,
+          log_every=10,
           logger_kwargs=dict(),
           test_every=100,
           num_test_episodes=5,
           test_episode_len_limit=None,
+          deterministic=False,
           save_freq=1,
-          device=torch.device("cpu"),
+          solve_score=None,
           ):
     logger = EpochLogger(**logger_kwargs)
     config = locals()
@@ -91,7 +93,7 @@ def train(env,
         loss, info = actor_critic.compute_loss(batch_return=batch_return,
                                                value_loss_coef=value_loss_coef,
                                                policy_loss_coef=policy_loss_coef,
-                                               entropy_reg_coef=entropy_reg_coef)
+                                               entropy_reg_coef=entropy_loss_coef)
         loss.backward()
 
         # Optimize
@@ -118,7 +120,7 @@ def train(env,
     episode_return = 0
     episode_length = 0
     logger.store(EpRet=0, EpLen=0)
-    for epoch in range(epochs):
+    for epoch in range(1, epochs + 1):
         actor_critic.reset()
         train_buffer = EpisodeBuffer()
         for t in range(steps_per_epoch):
@@ -158,8 +160,8 @@ def train(env,
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)
             logger.log_tabular('EpLen', average_only=True)
-            logger.log_tabular('V1Vals', with_min_and_max=True)
-            logger.log_tabular('V2Vals', with_min_and_max=True)
+            logger.log_tabular('V1Vals', average_only=True)
+            logger.log_tabular('V2Vals', average_only=True)
             logger.log_tabular('LogPi', with_min_and_max=True)
             logger.log_tabular('LossV', average_only=True)
             logger.log_tabular('LossPi', average_only=True)
@@ -168,17 +170,32 @@ def train(env,
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
 
+        # Test agent
+        solved = False
         if epoch % test_every == 0:
             # Test the performance of the deterministic version of the agent.
-            evaluate_agent(env=test_env,
-                           agent=actor_critic,
-                           deterministic=False,
-                           num_episodes=num_test_episodes,
-                           episode_len_limit=test_episode_len_limit,
-                           render=False)
+            episode_info = evaluate_agent(env=test_env,
+                                          agent=actor_critic,
+                                          deterministic=deterministic,
+                                          num_episodes=num_test_episodes,
+                                          episode_len_limit=test_episode_len_limit,
+                                          render=False)
+            solved = all(r >= solve_score for (t, r) in episode_info)
+
         # Save model
-        if (epoch % save_every == 0) or (epoch == epochs):
+        if (epoch % save_every == 0) or (epoch == epochs) or solved:
             logger.save_state({'env': env}, None)
+
+        # Check environment is solved
+        if solved:
+            plog = lambda msg: logger.log(msg, color='green')
+            plog("=" * 40)
+            plog(f"ENVIRONMENT SOLVED!")
+            plog("=" * 40)
+            plog(f'    TotalEnvInteracts {total_steps}')
+            plog(f'    Time {time.time() - start_time}')
+            plog(f'    Epoch {epoch}')
+            break
 
 
 if __name__ == '__main__':
@@ -194,17 +211,19 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
     parser.add_argument('--value_loss_coef', '-vl', type=float, default=1)
     parser.add_argument('--policy_loss_coef', '-pl', type=float, default=1)
-    parser.add_argument('--entropy_reg_coef', '-er', type=float, default=1)
+    parser.add_argument('--entropy_loss_coef', '-el', type=float, default=1)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--steps_per_epoch', type=int, default=10)
     parser.add_argument('--episode_len_limit', type=int, default=1000)
     parser.add_argument('--continue_training', '-c', action='store_true')
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
-    parser.add_argument('--save_every', type=int, default=100)
-    parser.add_argument('--log_every', type=int, default=100)
-    parser.add_argument('--test_every', type=int, default=100)
+    parser.add_argument('--save_every', type=int, default=None)
+    parser.add_argument('--log_every', type=int, default=None)
+    parser.add_argument('--test_every', type=int, default=None)
     parser.add_argument('--num_test_episodes', type=int, default=5)
     parser.add_argument('--test_episode_len_limit', type=int, default=None)
+    parser.add_argument('--deterministic', '-d', action='store_true')
+    parser.add_argument('--solve_score', type=int, default=None)
 
     args = parser.parse_args()
 
@@ -222,8 +241,8 @@ if __name__ == '__main__':
         saved_model_file = pathlib.Path(args.saved_model_file)
     elif args.continue_training:
         save_dir = pathlib.Path(logger_kwargs['output_dir'], 'pyt_save')
-        assert save_dir.exists()
-        saved_model_file = get_latest_saved_file(save_dir, prefix='model')
+        if save_dir.exists():
+            saved_model_file = get_latest_saved_file(save_dir, prefix='model')
 
     if saved_model_file:
         assert saved_model_file.exists()
@@ -239,24 +258,35 @@ if __name__ == '__main__':
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )
 
+    epochs = args.epochs
+    save_every = args.save_every or max(10, epochs // 10)
+    log_every = args.log_every or max(10, epochs // 100)
+    test_every = args.test_every or max(10, epochs // 10)
+
+    assert save_every <= epochs
+    assert log_every <= epochs
+    assert test_every <= epochs
+
     train(
         env=env,
         test_env=gym.make(args.env),
         model=model,
         seed=args.seed,
+        device=DEVICE,
         gamma=args.gamma,
         learning_rate=args.learning_rate,
         value_loss_coef=args.value_loss_coef,
         policy_loss_coef=args.policy_loss_coef,
-        entropy_reg_coef=args.entropy_reg_coef,
+        entropy_loss_coef=args.entropy_loss_coef,
         epochs=args.epochs,
         steps_per_epoch=args.steps_per_epoch,
         episode_len_limit=args.episode_len_limit,
-        save_every=args.save_every,
-        log_every=args.log_every,
+        save_every=save_every,
+        log_every=log_every,
         logger_kwargs=logger_kwargs,
-        test_every=args.test_every,
+        test_every=test_every,
         num_test_episodes=args.num_test_episodes,
         test_episode_len_limit=args.test_episode_len_limit,
-        device=DEVICE,
+        deterministic=args.deterministic,
+        solve_score=args.solve_score,
     )
