@@ -173,7 +173,7 @@ def train(env,
 
         # Update
         if dones[-1]:
-            next_value = 0
+            next_value = 0.0
         else:
             # Bellman backup for Q function
             # Q(s_t,a_t) = R_t + gamma * V(s_t+1)
@@ -184,8 +184,8 @@ def train(env,
         batch_feature = torch.stack(feature_tensors).to(device)
         batch_log_prob = torch.stack(log_prob_tensors).unsqueeze(-1).to(device)
         batch_entropy = torch.stack(entropy_tensors).unsqueeze(-1).to(device)
-        returns = calculate_returns(rewards=rewards,
-                                    dones=dones,
+        returns = calculate_returns(rewards=np.array(rewards),
+                                    dones=np.array(dones),
                                     next_value=next_value,
                                     discount_factor=gamma)
         batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(-1).to(device)
