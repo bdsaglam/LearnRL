@@ -44,6 +44,7 @@ def train(env,
           gamma=0.99,
           polyak=0.995,
           lr=1e-3,
+          value_loss_coef=0.1,
           entropy_reg_coef=0.2,
           save_every=100,
           log_every=100,
@@ -95,6 +96,7 @@ def train(env,
                                                            log_probs=log_probs,
                                                            entropies=entropies,
                                                            returns=returns,
+                                                           value_loss_coef=value_loss_coef,
                                                            entropy_reg_coef=entropy_reg_coef)
         loss = loss_v + loss_pi
         loss.backward()
@@ -229,6 +231,7 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--num_hidden', type=int, default=2)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
+    parser.add_argument('--value_loss_coef', type=float, default=0.1)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--steps_per_epoch', type=int, default=10)
     parser.add_argument('--continue_training', '-c', action='store_true')
@@ -275,6 +278,7 @@ if __name__ == '__main__':
         test_env=gym.make(args.env),
         model=model,
         gamma=args.gamma,
+        value_loss_coef=args.value_loss_coef,
         seed=args.seed,
         epochs=args.epochs,
         steps_per_epoch=args.steps_per_epoch,

@@ -60,14 +60,14 @@ class ActorCritic(nn.Module, IActorCritic):
     def actor_parameters(self):
         return self.actor.parameters()
 
-    def compute_loss(self, features, log_probs, entropies, returns, entropy_reg_coef):
+    def compute_loss(self, features, log_probs, entropies, returns, value_loss_coef, entropy_reg_coef):
         v1 = self.critic1(features)
         v2 = self.critic2(features)
 
         # MSE loss against Bellman backup
         loss_v1 = (returns - v1).pow(2).mean()
         loss_v2 = (returns - v2).pow(2).mean()
-        loss_v = loss_v1 + loss_v2
+        loss_v = value_loss_coef * (loss_v1 + loss_v2)
 
         # Useful info for logging
         v_info = dict(V1Vals=v1.cpu().detach().numpy(),
