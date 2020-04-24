@@ -65,6 +65,8 @@ def train(env,
     config['env_name'] = env.spec.id
     logger.save_config(config)
 
+    logger.log(f'Device: {device}', color='blue')
+
     torch.manual_seed(seed)
     np.random.seed(seed)
 
