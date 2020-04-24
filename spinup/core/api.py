@@ -1,4 +1,3 @@
-import itertools
 from abc import ABC, abstractmethod
 
 
@@ -14,27 +13,12 @@ class IAgent(ABC):
 
 class IActorCritic(ABC):
     @abstractmethod
-    def infer_value_action_dist(self, feature_tensor):
-        pass
-
-    @abstractmethod
     def infer_value(self, feature_tensor):
         pass
 
     @abstractmethod
     def infer_action_dist(self, feature_tensor):
         pass
-
-    @abstractmethod
-    def critic_parameters(self):
-        pass
-
-    @abstractmethod
-    def actor_parameters(self):
-        pass
-
-    def parameters(self):
-        return itertools.chain(self.critic_parameters(), self.actor_parameters())
 
 
 class IPolicy(ABC):
