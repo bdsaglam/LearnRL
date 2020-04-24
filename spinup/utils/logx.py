@@ -7,7 +7,6 @@ Logs to a tab-separated-values file (path/to/output_directory/progress.txt)
 """
 import atexit
 import json
-import os
 import os.path as osp
 import pathlib
 import time
@@ -17,6 +16,7 @@ import joblib
 import numpy as np
 import torch
 
+from spinup.user_config import DEFAULT_DATA_DIR
 from spinup.utils.mpi_tools import proc_id, mpi_statistics_scalar
 from spinup.utils.serialization_utils import convert_json
 
@@ -83,12 +83,13 @@ class Logger:
                 should give them all the same ``exp_name``.)
         """
         if proc_id() == 0:
-            self.output_dir = output_dir or "/tmp/experiments/%i" % int(time.time())
-            if osp.exists(self.output_dir):
+            self.output_dir = pathlib.Path(
+                output_dir or (pathlib.Path(DEFAULT_DATA_DIR) / f"experiments/{int(time.time())}"))
+            if self.output_dir.exists():
                 print("Warning: Log dir %s already exists! Storing info there anyway." % self.output_dir)
             else:
-                os.makedirs(self.output_dir)
-            self.output_file = open(osp.join(self.output_dir, output_fname), 'w')
+                self.output_dir.mkdir(parents=True)
+            self.output_file = open(self.output_dir / output_fname, 'w')
             atexit.register(self.output_file.close)
             print(colorize("Logging data to %s" % self.output_file.name, 'green', bold=True))
         else:
