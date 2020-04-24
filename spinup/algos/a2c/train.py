@@ -8,8 +8,9 @@ import torch
 from torch.optim import Adam
 
 from spinup.constants import DEVICE
+from spinup.core.api import IActorCritic
 from spinup.core.bellman import calculate_returns
-from spinup.examples.experimental import core
+from spinup.utils.buffers import EpisodeBuffer
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.experiment_utils import get_latest_saved_file
 from spinup.utils.logx import EpochLogger
@@ -17,15 +18,17 @@ from spinup.utils.logx import EpochLogger
 
 def train(env,
           test_env,
-          model: core.ActorCritic,
+          model: IActorCritic,
           seed=0,
-          steps_per_epoch=10,
           epochs=1000,
+          steps_per_epoch=10,
+          episode_len_limit=1000,
           gamma=0.99,
           polyak=0.995,
-          lr=1e-3,
-          value_loss_coef=0.1,
-          entropy_reg_coef=0.2,
+          learning_rate=1e-3,
+          value_loss_coef=1,
+          policy_loss_coef=1,
+          entropy_reg_coef=1,
           save_every=100,
           log_every=100,
           logger_kwargs=dict(),
@@ -61,21 +64,22 @@ def train(env,
     target_actor_critic.to(device)
 
     # Set up optimizers for policy and q-function
-    optimizer = Adam(actor_critic.parameters(), lr=lr)
+    optimizer = Adam(actor_critic.parameters(), lr=learning_rate)
 
     # Set up model saving
     logger.setup_pytorch_saver(actor_critic, name='model')
 
-    def update(rewards, dones, last_obs):
+    def update(episode_buffer):
         # Update
-        if dones[-1]:
+        if episode_buffer.dones[-1]:
             next_value = 0.0
         else:
+            last_obs = episode_buffer.next_observations[-1]
             obs_tensor = torch.tensor(last_obs, dtype=torch.float32).unsqueeze(0).to(device)
             next_value = target_actor_critic.predict_value(obs_tensor).cpu().item()
 
-        returns = calculate_returns(rewards=np.array(rewards),
-                                    dones=np.array(dones),
+        returns = calculate_returns(rewards=np.array(episode_buffer.rewards),
+                                    dones=np.array(episode_buffer.dones),
                                     next_value=next_value,
                                     discount_factor=gamma)
         batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(-1).to(device)
@@ -84,18 +88,16 @@ def train(env,
         optimizer.zero_grad()
 
         # Compute value and policy losses
-        loss_v, loss_pi, info = actor_critic.compute_loss(batch_return=batch_return,
-                                                          value_loss_coef=value_loss_coef,
-                                                          entropy_reg_coef=entropy_reg_coef)
-        loss = loss_v + loss_pi
+        loss, info = actor_critic.compute_loss(batch_return=batch_return,
+                                               value_loss_coef=value_loss_coef,
+                                               policy_loss_coef=policy_loss_coef,
+                                               entropy_reg_coef=entropy_reg_coef)
         loss.backward()
 
         # Optimize
         optimizer.step()
 
         # Log losses and info
-        logger.store(LossV=loss_v.detach().cpu().item())
-        logger.store(LossPi=loss_pi.detach().cpu().item())
         logger.store(**info)
 
         # Finally, update target networks by polyak averaging.
@@ -118,8 +120,7 @@ def train(env,
     logger.store(EpRet=0, EpLen=0)
     for epoch in range(epochs):
         actor_critic.reset()
-        rewards = []
-        dones = []
+        train_buffer = EpisodeBuffer()
         for t in range(steps_per_epoch):
             total_steps += 1
 
@@ -133,15 +134,14 @@ def train(env,
             episode_length += 1
 
             # Store experience to buffer
-            rewards.append(reward)
-            dones.append(done)
+            train_buffer.store(observation=obs, action=action, reward=reward, done=done, next_observation=obs2)
 
             # Super critical, easy to overlook step: make sure to update
             # most recent observation!
             obs = obs2
 
             # End of trajectory handling
-            if done:
+            if done or episode_length > episode_len_limit:
                 logger.store(EpRet=episode_return, EpLen=episode_length)
                 # Reset env
                 obs = env.reset()
@@ -150,7 +150,7 @@ def train(env,
                 episode_length = 0
                 break
 
-        update(rewards=rewards, dones=dones, last_obs=obs)
+        update(train_buffer)
 
         # End of epoch handling
         if epoch % log_every == 0:
@@ -161,9 +161,9 @@ def train(env,
             logger.log_tabular('V1Vals', with_min_and_max=True)
             logger.log_tabular('V2Vals', with_min_and_max=True)
             logger.log_tabular('LogPi', with_min_and_max=True)
-            logger.log_tabular('MeanEntropy', average_only=True)
-            logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossV', average_only=True)
+            logger.log_tabular('LossPi', average_only=True)
+            logger.log_tabular('LossEntropy', average_only=True)
             logger.log_tabular('TotalEnvInteracts', total_steps)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
@@ -191,9 +191,13 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--num_hidden', type=int, default=2)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
-    parser.add_argument('--value_loss_coef', type=float, default=0.1)
+    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
+    parser.add_argument('--value_loss_coef', '-vl', type=float, default=1)
+    parser.add_argument('--policy_loss_coef', '-pl', type=float, default=1)
+    parser.add_argument('--entropy_reg_coef', '-er', type=float, default=1)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--steps_per_epoch', type=int, default=10)
+    parser.add_argument('--episode_len_limit', type=int, default=1000)
     parser.add_argument('--continue_training', '-c', action='store_true')
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
     parser.add_argument('--save_every', type=int, default=100)
@@ -228,6 +232,8 @@ if __name__ == '__main__':
             p.requires_grad_()
         print("Loaded model from: ", saved_model_file)
     else:
+        from spinup.algos.a2c import core
+
         model = core.make_model(
             env,
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
@@ -237,11 +243,15 @@ if __name__ == '__main__':
         env=env,
         test_env=gym.make(args.env),
         model=model,
-        gamma=args.gamma,
-        value_loss_coef=args.value_loss_coef,
         seed=args.seed,
+        gamma=args.gamma,
+        learning_rate=args.learning_rate,
+        value_loss_coef=args.value_loss_coef,
+        policy_loss_coef=args.policy_loss_coef,
+        entropy_reg_coef=args.entropy_reg_coef,
         epochs=args.epochs,
         steps_per_epoch=args.steps_per_epoch,
+        episode_len_limit=args.episode_len_limit,
         save_every=args.save_every,
         log_every=args.log_every,
         logger_kwargs=logger_kwargs,

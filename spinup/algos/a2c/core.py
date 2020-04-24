@@ -93,7 +93,7 @@ class ActorCritic(nn.Module, IAgent):
             v = torch.min(v1, v2)
         return v
 
-    def compute_loss(self, batch_return, value_loss_coef, entropy_reg_coef):
+    def compute_loss(self, batch_return, value_loss_coef=1, policy_loss_coef=1, entropy_reg_coef=1):
         # all tensors have shape of (T, 1)
         # MSE loss against Bellman backup
         batch_log_probs, batch_entropy, batch_v1, batch_v2 = self.train_history.data()
@@ -101,19 +101,28 @@ class ActorCritic(nn.Module, IAgent):
         loss_v2 = (batch_return - batch_v2).pow(2).mean()
         loss_v = value_loss_coef * (loss_v1 + loss_v2)
 
-        # Entropy-regularized policy loss
+        # Policy loss
         batch_value = torch.min(batch_v1.detach(), batch_v2.detach())
         batch_advantage = batch_return - batch_value
-        loss_pi = -(entropy_reg_coef * batch_entropy.mean() + (batch_advantage * batch_log_probs).mean())
+        loss_pi = -policy_loss_coef * (batch_advantage * batch_log_probs).mean()
+
+        # Entropy-regularization
+        loss_entropy = -entropy_reg_coef * batch_entropy.mean()
+
+        # total loss
+        loss = loss_v + loss_pi + loss_entropy
 
         # Useful info for logging
         info = dict(
+            LossV=loss_v.detach().cpu().numpy(),
+            LossPi=loss_pi.detach().cpu().numpy(),
+            LossEntropy=loss_entropy.detach().cpu().numpy(),
             V1Vals=batch_v1.detach().cpu().numpy(),
             V2Vals=batch_v2.detach().cpu().numpy(),
             LogPi=batch_log_probs.detach().cpu().numpy(),
-            MeanEntropy=batch_entropy.detach().cpu().mean().numpy()
         )
-        return loss_v, loss_pi, info
+
+        return loss, info
 
     def act(self, obs, deterministic=False):
         obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(DEVICE)

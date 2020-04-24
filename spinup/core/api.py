@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Dict
 
 import torch
 
@@ -23,4 +24,8 @@ class IAgentModel(IAgent, torch.nn.Module):
 class IActorCritic(IAgentModel):
     @abstractmethod
     def predict_value(self, obs_tensor: torch.tensor) -> torch.tensor:
+        pass
+
+    @abstractmethod
+    def compute_loss(self, batch_return: torch.tensor, **kwargs) -> (torch.tensor, Dict):
         pass
