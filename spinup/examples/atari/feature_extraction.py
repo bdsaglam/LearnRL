@@ -10,7 +10,7 @@ NUM_RECENT_FRAMES = 4
 
 
 def preprocess(obs):
-    img = Image.fromarray(obs[32:192])
+    img = Image.fromarray(obs[32:192], mode="RGB")
     c, h, w = FRAME_SHAPE
     transformation = torchvision.transforms.Compose([
         torchvision.transforms.Resize((h, w)),
@@ -23,12 +23,11 @@ def preprocess(obs):
 
 def make_frame_buffer():
     c, h, w = FRAME_SHAPE
-    buffer = deque(maxlen=NUM_RECENT_FRAMES)
-    for _ in range(NUM_RECENT_FRAMES - 1):
-        t = torch.zeros(c, h, w, dtype=torch.float32)
-        buffer.append(t)
+    buffer = []
+    for _ in range(NUM_RECENT_FRAMES):
+        buffer.append(torch.zeros(c, h, w, dtype=torch.float32))
 
-    return buffer
+    return deque(buffer, maxlen=NUM_RECENT_FRAMES)
 
 
 def frames_feature_extractor():

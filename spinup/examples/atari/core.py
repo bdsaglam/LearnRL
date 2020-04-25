@@ -1,113 +1,60 @@
-import itertools
-from copy import deepcopy
-
 import torch
 import torch.nn as nn
-from torch.distributions.categorical import Categorical
 
-from spinup.constants import DEVICE
-from spinup.core.api import IAgent, IActorCritic
-from spinup.examples.atari.feature_extraction import make_frame_buffer, preprocess
-from spinup.utils.nn_utils import mlp
-
-
-class MLPCategoricalActor(nn.Module):
-
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation=nn.ReLU):
-        super().__init__()
-        self.logits_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
-
-    def forward(self, obs):
-        # Produce action distributions for given observations, and
-        # optionally compute the log likelihood of given actions under
-        # those distributions.
-        logits = self.logits_net(obs)
-        return Categorical(logits=logits)
+from spinup.algos.a2c.core import ActorCritic
+from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
+from spinup.examples.atari.feature_extraction import frames_feature_extractor, make_frame_buffer, preprocess
+from spinup.utils import nn_utils
 
 
-class MLPVFunction(nn.Module):
-
-    def __init__(self, obs_dim, hidden_sizes, activation=nn.ReLU):
-        super().__init__()
-        self.q = mlp([obs_dim] + list(hidden_sizes) + [1], activation)
-
-    def forward(self, obs):
-        return self.q(obs)
-
-
-class ActorCritic(nn.Module, IActorCritic):
+class AtariActorCritic(ActorCritic):
     def __init__(self, feature_extractor: nn.Module, actor: nn.Module, critic: nn.Module):
-        super().__init__()
-        self.feature_extractor = feature_extractor
-        self.actor = actor
-        self.critic1 = critic
-        self.critic2 = deepcopy(critic)
-
-    def infer_value(self, feature_tensor):
-        v1 = self.critic1(feature_tensor)
-        v2 = self.critic2(feature_tensor)
-        values = torch.min(v1, v2)
-        return values
-
-    def infer_action_dist(self, feature_tensor):
-        dist = self.actor(feature_tensor)
-        return dist
-
-    def critic_parameters(self):
-        return itertools.chain(self.critic1.parameters(), self.critic2.parameters())
-
-    def actor_parameters(self):
-        return self.actor.parameters()
-
-    def feature_extractor_parameters(self):
-        return self.feature_extractor.parameters()
-
-    def compute_loss(self, features, log_probs, entropies, returns, value_loss_coef, entropy_reg_coef):
-        v1 = self.critic1(features)
-        v2 = self.critic2(features)
-
-        # MSE loss against Bellman backup
-        loss_v1 = (returns - v1).pow(2).mean()
-        loss_v2 = (returns - v2).pow(2).mean()
-        loss_v = value_loss_coef * (loss_v1 + loss_v2)
-
-        # Useful info for logging
-        v_info = dict(V1Vals=v1.cpu().detach().numpy(),
-                      V2Vals=v2.cpu().detach().numpy())
-
-        values = torch.min(v1.detach(), v2.detach())
-        advantages = returns - values
-
-        # Entropy-regularized policy loss
-        loss_pi = -entropy_reg_coef * entropies.mean() - (advantages * log_probs).mean()
-
-        # Useful info for logging
-        pi_info = dict(LogPi=log_probs.cpu().detach().numpy(),
-                       MeanEntropy=entropies.cpu().detach().mean().numpy())
-
-        return loss_v, v_info, loss_pi, pi_info
-
-
-class Agent(IAgent):
-    def __init__(self, actor_critic):
-        super().__init__()
-        self.actor_critic = actor_critic.to(DEVICE)
-        self.buffer = make_frame_buffer()
+        super().__init__(feature_extractor=feature_extractor, actor=actor, critic=critic)
+        self.frame_buffer = make_frame_buffer()
 
     def reset(self):
-        self.buffer = make_frame_buffer()
+        super().reset()
+        self.frame_buffer = make_frame_buffer()
+
+    def step(self, obs_tensor):
+        device = obs_tensor.device
+        frame_tensor = preprocess(obs_tensor.cpu().numpy()).to(device)
+        self.frame_buffer.append(frame_tensor)
+        frames = list(self.frame_buffer)
+        multi_frame_tensor = torch.cat(frames, dim=0)
+        return super().step(multi_frame_tensor)
+
+    def predict_value(self, obs_tensor):
+        device = obs_tensor.device
+        frame_tensor = preprocess(obs_tensor.cpu().numpy()).to(device)
+        frames = list(self.frame_buffer)[1:] + [frame_tensor]
+        multi_frame_tensor = torch.cat(frames, dim=0)
+        return super().predict_value(multi_frame_tensor)
 
     def act(self, obs, deterministic=False):
-        dist = self.action_dist(obs)
-        if deterministic:
-            return dist.probs.argmax(-1).cpu().numpy()
-        return dist.sample().cpu().numpy()
+        frame_tensor = preprocess(obs)
+        self.frame_buffer.append(frame_tensor)
+        frames = list(self.frame_buffer)
+        multi_frame_tensor = torch.cat(frames, dim=0)
+        return super().act(multi_frame_tensor.numpy(), deterministic)
 
-    def action_dist(self, obs):
-        image_tensor = preprocess(obs)
-        self.buffer.append(image_tensor)
-        batch_input = torch.cat(list(self.buffer), dim=0).unsqueeze(0).to(DEVICE)
-        with torch.no_grad():
-            feature_tensor = self.actor_critic.feature_extractor(batch_input).squeeze(0)
-            dist = self.actor_critic.infer_action_dist(feature_tensor)
-        return dist
+
+def make_model(env, model_kwargs):
+    obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.n
+
+    # Create actor-critic module and target networks
+    feature_extractor, feature_dim = frames_feature_extractor()
+    actor_network = MLPCategoricalActor(feature_dim, act_dim, **model_kwargs)
+    critic_network = MLPVFunction(feature_dim, **model_kwargs)
+    ac = AtariActorCritic(
+        feature_extractor=feature_extractor,
+        actor=actor_network,
+        critic=critic_network
+    )
+
+    # Count variables (protip: try to get a feel for how different size networks behave!)
+    var_counts = tuple(nn_utils.count_vars(module) for module in [actor_network, critic_network])
+    print('\nNumber of parameters: \t actor: %d, \t critic: %d\n' % var_counts)
+
+    return ac

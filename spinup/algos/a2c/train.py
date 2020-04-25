@@ -119,7 +119,8 @@ def train(env,
     # Reset episode stats
     episode_return = 0
     episode_length = 0
-    logger.store(EpRet=0, EpLen=0)
+    for _ in range(5):
+        logger.store(EpRet=0, EpLen=0)
     for epoch in range(1, epochs + 1):
         actor_critic.reset()
         train_buffer = EpisodeBuffer()
