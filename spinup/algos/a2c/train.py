@@ -262,7 +262,7 @@ if __name__ == '__main__':
 
     epochs = args.epochs
     save_every = args.save_every or max(10, epochs // 10)
-    log_every = args.log_every or max(10, epochs // 100)
+    log_every = args.log_every or max(10, epochs // 10)
     test_every = args.test_every or max(10, epochs // 10)
 
     assert save_every <= epochs
