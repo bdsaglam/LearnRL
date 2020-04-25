@@ -180,7 +180,8 @@ def train(env,
                                           num_episodes=num_test_episodes,
                                           episode_len_limit=test_episode_len_limit,
                                           render=False)
-            solved = all(r >= solve_score for (t, r) in episode_info)
+            if solve_score is not None:
+                solved = all(r >= solve_score for (t, r) in episode_info)
 
         # Save model
         if (epoch % save_every == 0) or (epoch == epochs) or solved:
