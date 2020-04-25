@@ -2,35 +2,11 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
-from torch.distributions.categorical import Categorical
 
 from spinup.constants import DEVICE
 from spinup.core.api import IAgent
+from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
 from spinup.utils import nn_utils
-
-
-class MLPCategoricalActor(nn.Module):
-
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation=nn.ReLU):
-        super().__init__()
-        self.logits_net = nn_utils.mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
-
-    def forward(self, obs):
-        # Produce action distributions for given observations, and
-        # optionally compute the log likelihood of given actions under
-        # those distributions.
-        logits = self.logits_net(obs)
-        return Categorical(logits=logits)
-
-
-class MLPVFunction(nn.Module):
-
-    def __init__(self, obs_dim, hidden_sizes, activation=nn.ReLU):
-        super().__init__()
-        self.q = nn_utils.mlp([obs_dim] + list(hidden_sizes) + [1], activation)
-
-    def forward(self, obs):
-        return self.q(obs)
 
 
 class History:
@@ -67,7 +43,8 @@ class ActorCritic(nn.Module, IAgent):
     def reset(self):
         self.train_history = History()
 
-    def step(self, batch_obs):
+    def step(self, obs_tensor):
+        batch_obs = obs_tensor.unsqueeze(0)
         feature_tensor = self.feature_extractor(batch_obs)
         v1 = self.critic1(feature_tensor)
         v2 = self.critic2(feature_tensor)
@@ -83,15 +60,16 @@ class ActorCritic(nn.Module, IAgent):
             v2=v2,
         )
 
-        return action
+        return action.squeeze(0)
 
-    def predict_value(self, batch_obs):
+    def predict_value(self, obs_tensor):
+        batch_obs = obs_tensor.unsqueeze(0)
         with torch.no_grad():
             feature_tensor = self.feature_extractor(batch_obs)
             v1 = self.critic1(feature_tensor)
             v2 = self.critic2(feature_tensor)
             v = torch.min(v1, v2)
-        return v
+        return v.squeeze(0)
 
     def compute_loss(self, batch_return, value_loss_coef=1, policy_loss_coef=1, entropy_reg_coef=1):
         # all tensors have shape of (T, 1)

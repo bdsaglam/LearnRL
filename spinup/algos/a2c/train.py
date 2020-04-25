@@ -77,7 +77,7 @@ def train(env,
             next_value = 0.0
         else:
             last_obs = episode_buffer.next_observations[-1]
-            obs_tensor = torch.tensor(last_obs, dtype=torch.float32).unsqueeze(0).to(device)
+            obs_tensor = torch.tensor(last_obs, dtype=torch.float32).to(device)
             next_value = target_actor_critic.predict_value(obs_tensor).cpu().item()
 
         returns = calculate_returns(rewards=np.array(episode_buffer.rewards),
@@ -127,7 +127,7 @@ def train(env,
             total_steps += 1
 
             # Get action from the model
-            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device)
+            obs_tensor = torch.tensor(obs, dtype=torch.float32).to(device)
             action = actor_critic.step(obs_tensor)
 
             # Step the env
