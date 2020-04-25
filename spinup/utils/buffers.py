@@ -40,14 +40,14 @@ class ReplayBuffer:
 class EpisodeBuffer:
     def __init__(self):
         self.observations = []
-        self.next_observations = []
         self.actions = []
         self.rewards = []
+        self.next_observations = []
         self.dones = []
 
     def store(self, observation, action, reward, next_observation, done):
         self.observations.append(observation)
         self.actions.append(action)
         self.rewards.append(reward)
-        self.dones.append(done)
         self.next_observations.append(next_observation)
+        self.dones.append(done)

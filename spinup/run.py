@@ -6,6 +6,7 @@ from textwrap import dedent
 
 import gym
 
+import spinup # do not remove this, it is called from eval
 from spinup.utils.run_utils import ExperimentGrid
 
 # Command line args that will go to ExperimentGrid.run, and must possess unique
