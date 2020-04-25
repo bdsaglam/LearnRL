@@ -67,8 +67,8 @@ class ActorCritic(nn.Module, IAgent):
     def reset(self):
         self.train_history = History()
 
-    def step(self, obs_tensor):
-        feature_tensor = self.feature_extractor(obs_tensor)
+    def step(self, batch_obs):
+        feature_tensor = self.feature_extractor(batch_obs)
         v1 = self.critic1(feature_tensor)
         v2 = self.critic2(feature_tensor)
         dist = self.actor(feature_tensor)
@@ -85,9 +85,9 @@ class ActorCritic(nn.Module, IAgent):
 
         return action
 
-    def predict_value(self, obs_tensor):
+    def predict_value(self, batch_obs):
         with torch.no_grad():
-            feature_tensor = self.feature_extractor(obs_tensor)
+            feature_tensor = self.feature_extractor(batch_obs)
             v1 = self.critic1(feature_tensor)
             v2 = self.critic2(feature_tensor)
             v = torch.min(v1, v2)
