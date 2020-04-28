@@ -9,16 +9,17 @@ from torch.optim import Adam
 
 from spinup.constants import DEVICE
 from spinup.core.api import IActorCritic
+from spinup.utils import mpi_tools, mpi_pytorch
 from spinup.utils.buffers import EpisodeBuffer
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.experiment_utils import get_latest_saved_file
 from spinup.utils.logx import EpochLogger
 
 
-def train(env,
-          test_env,
+def train(env_fn,
           model: IActorCritic,
           seed=0,
+          num_cpu=1,
           device=torch.device("cpu"),
           epochs=1000,
           steps_per_epoch=10,
@@ -41,24 +42,34 @@ def train(env,
           save_freq=1,
           solve_score=None,
           ):
+    # Special function to avoid certain slowdowns from PyTorch + MPI combo.
+    mpi_pytorch.setup_pytorch_for_mpi()
+
+    # Set up logger and save configuration
     logger = EpochLogger(**logger_kwargs)
     config = locals()
-    del config['env']
-    del config['test_env']
+    del config['env_fn']
     del config['model']
     del config['logger']
-    config['env_name'] = env.spec.id
     logger.save_config(config)
 
+    # Random seed
+    seed += 10000 * mpi_tools.proc_id()
     torch.manual_seed(seed)
     np.random.seed(seed)
 
+    # Instantiate environment
+    env = env_fn()
+    test_env = env_fn()
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.n
 
     # training model and target model
     actor_critic = model
     target_actor_critic = deepcopy(actor_critic)
+    # Sync params across processes
+    mpi_pytorch.sync_params(actor_critic)
+    mpi_pytorch.sync_params(target_actor_critic)
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
     for p in target_actor_critic.parameters():
         p.requires_grad = False
@@ -95,7 +106,7 @@ def train(env,
                                                policy_loss_coef=policy_loss_coef,
                                                entropy_reg_coef=entropy_loss_coef)
         loss.backward()
-
+        mpi_pytorch.mpi_avg_grads(actor_critic)
         # Optimize
         optimizer.step()
 
@@ -109,6 +120,8 @@ def train(env,
                 # params, as opposed to "mul" and "add", which would make new tensors.
                 p_targ.data.mul_(polyak)
                 p_targ.data.add_((1 - polyak) * p.data)
+
+        mpi_pytorch.sync_params(target_actor_critic)
 
     # Prepare for interaction with environment
     start_time = time.time()
@@ -167,7 +180,7 @@ def train(env,
             logger.log_tabular('LossV', average_only=True)
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossEntropy', average_only=True)
-            logger.log_tabular('TotalEnvInteracts', total_steps)
+            logger.log_tabular('TotalEnvInteracts', total_steps * num_cpu)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
 
@@ -207,6 +220,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--env', type=str, default='CartPole-v1')
     parser.add_argument('--exp_name', type=str, default=None)
+    parser.add_argument('--cpu', type=int, default=4)
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--num_hidden', type=int, default=2)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
@@ -262,7 +276,7 @@ if __name__ == '__main__':
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )
 
-    epochs = args.epochs
+    epochs = args.epochs // args.cpu
     save_every = args.save_every or max(10, epochs // 10)
     log_every = args.log_every or max(10, epochs // 10)
     test_every = args.test_every or max(10, epochs // 10)
@@ -271,11 +285,13 @@ if __name__ == '__main__':
     assert log_every <= epochs
     assert test_every <= epochs
 
+    mpi_tools.mpi_fork(args.cpu)  # run parallel code with mpi
+
     train(
-        env=env,
-        test_env=gym.make(args.env),
+        env_fn=lambda: gym.make(args.env),
         model=model,
         seed=args.seed,
+        num_cpu=args.cpu,
         device=DEVICE,
         gamma=args.gamma,
         use_gae=args.use_gae,
@@ -284,7 +300,7 @@ if __name__ == '__main__':
         value_loss_coef=args.value_loss_coef,
         policy_loss_coef=args.policy_loss_coef,
         entropy_loss_coef=args.entropy_loss_coef,
-        epochs=args.epochs,
+        epochs=epochs,
         steps_per_epoch=args.steps_per_epoch,
         episode_len_limit=args.episode_len_limit,
         save_every=save_every,
