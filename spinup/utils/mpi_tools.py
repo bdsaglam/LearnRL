@@ -22,6 +22,14 @@ def mpi_fork(n, bind_to_core=False, allow_run_as_root=False):
 
         bind_to_core (bool): Bind each MPI process to a core.
     """
+    # Do not allow running MPI as root on macOS
+
+    if allow_run_as_root:
+        import platform
+        os_name = platform.uname().system
+        if os_name.lower() == 'darwin':
+            exit("Running MPI as root on macOS (Darwin) is not allowed")
+
     if n <= 1:
         return
     if os.getenv("IN_MPI") is None:
