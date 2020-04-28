@@ -42,8 +42,11 @@ def train(env_fn,
           save_freq=1,
           solve_score=None,
           ):
-    # Special function to avoid certain slowdowns from PyTorch + MPI combo.
-    mpi_pytorch.setup_pytorch_for_mpi()
+    use_MPI = num_cpu > 1
+
+    if use_MPI:
+        # Special function to avoid certain slowdowns from PyTorch + MPI combo.
+        mpi_pytorch.setup_pytorch_for_mpi()
 
     # Set up logger and save configuration
     logger = EpochLogger(**logger_kwargs)
@@ -54,7 +57,8 @@ def train(env_fn,
     logger.save_config(config)
 
     # Random seed
-    seed += 10000 * mpi_tools.proc_id()
+    if use_MPI:
+        seed += 10000 * mpi_tools.proc_id()
     torch.manual_seed(seed)
     np.random.seed(seed)
 
@@ -67,9 +71,10 @@ def train(env_fn,
     # training model and target model
     actor_critic = model
     target_actor_critic = deepcopy(actor_critic)
-    # Sync params across processes
-    mpi_pytorch.sync_params(actor_critic)
-    mpi_pytorch.sync_params(target_actor_critic)
+    if use_MPI:
+        # Sync params across processes
+        mpi_pytorch.sync_params(actor_critic)
+        mpi_pytorch.sync_params(target_actor_critic)
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
     for p in target_actor_critic.parameters():
         p.requires_grad = False
@@ -106,7 +111,8 @@ def train(env_fn,
                                                policy_loss_coef=policy_loss_coef,
                                                entropy_reg_coef=entropy_loss_coef)
         loss.backward()
-        mpi_pytorch.mpi_avg_grads(actor_critic)
+        if use_MPI:
+            mpi_pytorch.mpi_avg_grads(actor_critic)
         # Optimize
         optimizer.step()
 
@@ -120,8 +126,8 @@ def train(env_fn,
                 # params, as opposed to "mul" and "add", which would make new tensors.
                 p_targ.data.mul_(polyak)
                 p_targ.data.add_((1 - polyak) * p.data)
-
-        mpi_pytorch.sync_params(target_actor_critic)
+        if use_MPI:
+            mpi_pytorch.sync_params(target_actor_critic)
 
     # Prepare for interaction with environment
     start_time = time.time()
@@ -246,6 +252,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    # Setup experiment name
     env = gym.make(args.env)
 
     from spinup.utils.run_utils import setup_logger_kwargs
@@ -255,6 +262,7 @@ if __name__ == '__main__':
 
     torch.set_num_threads(torch.get_num_threads())
 
+    # Load or create model
     saved_model_file = None
     if args.saved_model_file:
         saved_model_file = pathlib.Path(args.saved_model_file)
@@ -277,6 +285,7 @@ if __name__ == '__main__':
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )
 
+    # Setup epoch number and action frequencies
     epochs = args.epochs // args.cpu
     save_every = args.save_every or max(10, epochs // 10)
     log_every = args.log_every or max(10, epochs // 10)
@@ -286,7 +295,8 @@ if __name__ == '__main__':
     assert log_every <= epochs
     assert test_every <= epochs
 
-    mpi_tools.mpi_fork(args.cpu, allow_run_as_root=args.allow_run_as_root)  # run parallel code with mpi
+    if args.cpu > 1:
+        mpi_tools.mpi_fork(args.cpu, allow_run_as_root=args.allow_run_as_root)  # run parallel code with mpi
 
     train(
         env_fn=lambda: gym.make(args.env),
