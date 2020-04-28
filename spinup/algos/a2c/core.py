@@ -86,7 +86,7 @@ class ActorCritic(IActorCritic):
         returns = calculate_returns(rewards=rewards,
                                     next_value=next_value,
                                     discount_factor=discount_factor)
-        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0)
+        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0).to(DEVICE)
 
         # all tensors have shape of (T, 1)
         # MSE loss against Bellman backup
@@ -99,11 +99,11 @@ class ActorCritic(IActorCritic):
         batch_value = torch.min(batch_v1.detach(), batch_v2.detach())
         if use_gae:
             advantages = generalized_advantage_estimate(rewards=rewards,
-                                                        values=batch_value.squeeze(0).numpy(),
+                                                        values=batch_value.squeeze(0).cpu().numpy(),
                                                         next_value=next_value,
                                                         discount_factor=discount_factor,
                                                         tau=tau)
-            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0)
+            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0).to(DEVICE)
         else:
             batch_advantage = batch_return - batch_value
         loss_pi = -policy_loss_coef * (batch_advantage * batch_log_probs).mean()
