@@ -1,11 +1,13 @@
 from copy import deepcopy
 
+import numpy as np
 import torch
 import torch.nn as nn
 
 from spinup.constants import DEVICE
-from spinup.core.api import IAgent
+from spinup.core.api import IActorCritic
 from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
+from spinup.core.bellman import calculate_returns, generalized_advantage_estimate, calculate_rewards_to_go
 from spinup.utils import nn_utils
 
 
@@ -30,7 +32,7 @@ class History:
         return batch_log_probs, batch_entropy, batch_v1, batch_v2
 
 
-class ActorCritic(nn.Module, IAgent):
+class ActorCritic(IActorCritic):
     def __init__(self, feature_extractor: nn.Module, actor: nn.Module, critic: nn.Module):
         super().__init__()
         self.feature_extractor = feature_extractor
@@ -71,7 +73,24 @@ class ActorCritic(nn.Module, IAgent):
             v = torch.min(v1, v2)
         return v.squeeze(0)
 
-    def compute_loss(self, batch_return, value_loss_coef=1, policy_loss_coef=1, entropy_reg_coef=1):
+    def compute_loss(self,
+                     rewards,
+                     dones,
+                     next_value,
+                     discount_factor,
+                     use_gae=True,
+                     tau=0.95,
+                     value_loss_coef=1,
+                     policy_loss_coef=1,
+                     entropy_reg_coef=1
+                     ):
+        returns = calculate_returns(rewards=rewards,
+                                    dones=dones,
+                                    next_value=next_value,
+                                    discount_factor=discount_factor)
+
+        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0)
+
         # all tensors have shape of (T, 1)
         # MSE loss against Bellman backup
         batch_log_probs, batch_entropy, batch_v1, batch_v2 = self.train_history.data()
@@ -81,7 +100,15 @@ class ActorCritic(nn.Module, IAgent):
 
         # Policy loss
         batch_value = torch.min(batch_v1.detach(), batch_v2.detach())
-        batch_advantage = batch_return - batch_value
+        if use_gae:
+            advantages = generalized_advantage_estimate(rewards=rewards,
+                                                        values=batch_value.squeeze(0).numpy(),
+                                                        next_value=next_value,
+                                                        discount_factor=discount_factor,
+                                                        tau=tau)
+            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0)
+        else:
+            batch_advantage = batch_return - batch_value
         loss_pi = -policy_loss_coef * (batch_advantage * batch_log_probs).mean()
 
         # Entropy-regularization

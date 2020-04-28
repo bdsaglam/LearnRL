@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict
-
+import numpy as np
 import torch
 
 
@@ -27,5 +27,10 @@ class IActorCritic(IAgentModel):
         pass
 
     @abstractmethod
-    def compute_loss(self, batch_return: torch.tensor, **kwargs) -> (torch.tensor, Dict):
+    def compute_loss(self,
+                     rewards: np.ndarray,
+                     dones: np.ndarray,
+                     next_value: float,
+                     discount_factor: float,
+                     **kwargs) -> (torch.tensor, Dict):
         pass

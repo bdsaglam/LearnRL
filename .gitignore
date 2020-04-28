@@ -4,6 +4,9 @@ snippets.sh
 # PyCharm files
 .idea
 
+# Jupyter notebook checkpoints
+*.ipynb_checkpoints
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -36,3 +39,6 @@ pip-delete-this-directory.txt
 .cache
 nosetests.xml
 coverage.xml
+
+# OSX
+.DS_Store

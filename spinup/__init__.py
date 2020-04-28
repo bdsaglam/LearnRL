@@ -7,4 +7,3 @@ from spinup.algos.vpg.vpg import vpg
 
 # Loggers
 from spinup.utils.logx import Logger, EpochLogger
-

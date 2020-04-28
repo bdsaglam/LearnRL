@@ -25,6 +25,8 @@ def train(env,
           steps_per_epoch=10,
           episode_len_limit=1000,
           gamma=0.99,
+          use_gae=True,
+          tau=0.95,
           polyak=0.995,
           learning_rate=1e-3,
           value_loss_coef=1,
@@ -77,20 +79,19 @@ def train(env,
             next_value = 0.0
         else:
             last_obs = episode_buffer.next_observations[-1]
-            obs_tensor = torch.tensor(last_obs, dtype=torch.float32).to(device)
-            next_value = target_actor_critic.predict_value(obs_tensor).cpu().item()
-
-        returns = calculate_returns(rewards=np.array(episode_buffer.rewards),
-                                    dones=np.array(episode_buffer.dones),
-                                    next_value=next_value,
-                                    discount_factor=gamma)
-        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(-1).to(device)
+            last_obs_tensor = torch.tensor(last_obs, dtype=torch.float32).to(device)
+            next_value = target_actor_critic.predict_value(last_obs_tensor).cpu().item()
 
         # Super critical!!
         optimizer.zero_grad()
 
         # Compute value and policy losses
-        loss, info = actor_critic.compute_loss(batch_return=batch_return,
+        loss, info = actor_critic.compute_loss(rewards=np.array(episode_buffer.rewards),
+                                               dones=np.array(episode_buffer.dones),
+                                               next_value=next_value,
+                                               discount_factor=gamma,
+                                               use_gae=use_gae,
+                                               tau=tau,
                                                value_loss_coef=value_loss_coef,
                                                policy_loss_coef=policy_loss_coef,
                                                entropy_reg_coef=entropy_loss_coef)
@@ -210,6 +211,8 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--num_hidden', type=int, default=2)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
+    parser.add_argument('--tau', '-t', type=float, default=0.99)
+    parser.add_argument('--use_gae', type=bool, default=True)
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
     parser.add_argument('--value_loss_coef', '-vl', type=float, default=1)
     parser.add_argument('--policy_loss_coef', '-pl', type=float, default=1)
@@ -276,6 +279,8 @@ if __name__ == '__main__':
         seed=args.seed,
         device=DEVICE,
         gamma=args.gamma,
+        use_gae=args.use_gae,
+        tau=args.tau,
         learning_rate=args.learning_rate,
         value_loss_coef=args.value_loss_coef,
         policy_loss_coef=args.policy_loss_coef,
