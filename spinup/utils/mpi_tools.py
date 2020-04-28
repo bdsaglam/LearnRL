@@ -6,7 +6,7 @@ import numpy as np
 from mpi4py import MPI
 
 
-def mpi_fork(n, bind_to_core=False):
+def mpi_fork(n, bind_to_core=False, allow_run_as_root=False):
     """
     Re-launches the current script with workers linked by MPI.
 
@@ -34,6 +34,8 @@ def mpi_fork(n, bind_to_core=False):
         args = ["mpirun", "-np", str(n)]
         if bind_to_core:
             args += ["-bind-to", "core"]
+        if allow_run_as_root:
+            args += ["--allow-run-as-root"]
         args += [sys.executable] + sys.argv
         subprocess.check_call(args, env=env)
         sys.exit()

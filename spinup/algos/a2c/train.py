@@ -221,6 +221,7 @@ if __name__ == '__main__':
     parser.add_argument('--env', type=str, default='CartPole-v1')
     parser.add_argument('--exp_name', type=str, default=None)
     parser.add_argument('--cpu', type=int, default=4)
+    parser.add_argument('--allow_run_as_root', action='store_true')
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--num_hidden', type=int, default=2)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
@@ -285,7 +286,7 @@ if __name__ == '__main__':
     assert log_every <= epochs
     assert test_every <= epochs
 
-    mpi_tools.mpi_fork(args.cpu)  # run parallel code with mpi
+    mpi_tools.mpi_fork(args.cpu, allow_run_as_root=args.allow_run_as_root)  # run parallel code with mpi
 
     train(
         env_fn=lambda: gym.make(args.env),
