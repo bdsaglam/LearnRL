@@ -9,7 +9,6 @@ from torch.optim import Adam
 
 from spinup.constants import DEVICE
 from spinup.core.api import IActorCritic
-from spinup.core.bellman import calculate_returns
 from spinup.utils.buffers import EpisodeBuffer
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.experiment_utils import get_latest_saved_file

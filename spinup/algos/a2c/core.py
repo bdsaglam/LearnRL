@@ -1,13 +1,12 @@
 from copy import deepcopy
 
-import numpy as np
 import torch
 import torch.nn as nn
 
 from spinup.constants import DEVICE
 from spinup.core.api import IActorCritic
 from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
-from spinup.core.bellman import calculate_returns, generalized_advantage_estimate, calculate_rewards_to_go
+from spinup.core.bellman import generalized_advantage_estimate, calculate_returns
 from spinup.utils import nn_utils
 
 
@@ -85,10 +84,8 @@ class ActorCritic(IActorCritic):
                      entropy_reg_coef=1
                      ):
         returns = calculate_returns(rewards=rewards,
-                                    dones=dones,
                                     next_value=next_value,
                                     discount_factor=discount_factor)
-
         batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0)
 
         # all tensors have shape of (T, 1)
