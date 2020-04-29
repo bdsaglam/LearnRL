@@ -1,11 +1,11 @@
 import pathlib
 
-import gym
 import torch
 
 from spinup.algos.a2c.train import train
 from spinup.constants import DEVICE
 from spinup.examples.atari import core
+from spinup.examples.atari.environment import make_atari_env
 from spinup.utils.experiment_utils import get_latest_saved_file
 
 if __name__ == '__main__':
@@ -13,17 +13,22 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--env', type=str, default='Breakout-v0')
+    parser.add_argument('--env', type=str, default='BreakoutNoFrameskip-v4')
     parser.add_argument('--exp_name', type=str, default=None)
-    parser.add_argument('--hidden_size', type=int, default=256)
+    parser.add_argument('--cpu', type=int, default=1)
+    parser.add_argument('--allow_run_as_root', action='store_true')
+    parser.add_argument('--hidden_size', type=int, default=64)
     parser.add_argument('--num_hidden', type=int, default=1)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
+    parser.add_argument('--tau', '-t', type=float, default=0.99)
+    parser.add_argument('--max_grad_norm', type=float, default=None)
+    parser.add_argument('--use_gae', type=bool, default=True)
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
     parser.add_argument('--value_loss_coef', '-vl', type=float, default=1)
     parser.add_argument('--policy_loss_coef', '-pl', type=float, default=1)
     parser.add_argument('--entropy_loss_coef', '-el', type=float, default=1)
     parser.add_argument('--epochs', type=int, default=1000)
-    parser.add_argument('--steps_per_epoch', type=int, default=10)
+    parser.add_argument('--steps_per_epoch', type=int, default=64)
     parser.add_argument('--episode_len_limit', type=int, default=1000)
     parser.add_argument('--continue_training', '-c', action='store_true')
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
@@ -37,7 +42,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    env = gym.make(args.env)
+    # Setup experiment name
+    env = make_atari_env(args.env)
 
     from spinup.utils.run_utils import setup_logger_kwargs
 
@@ -46,6 +52,7 @@ if __name__ == '__main__':
 
     torch.set_num_threads(torch.get_num_threads())
 
+    # Load or create model
     saved_model_file = None
     if args.saved_model_file:
         saved_model_file = pathlib.Path(args.saved_model_file)
@@ -61,12 +68,14 @@ if __name__ == '__main__':
             p.requires_grad_()
         print("Loaded model from: ", saved_model_file)
     else:
+
         model = core.make_model(
             env,
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )
 
-    epochs = args.epochs
+    # Setup epoch number and action frequencies
+    epochs = args.epochs // args.cpu
     save_every = args.save_every or max(10, epochs // 10)
     log_every = args.log_every or max(10, epochs // 100)
     test_every = args.test_every or max(10, epochs // 10)
@@ -76,17 +85,20 @@ if __name__ == '__main__':
     assert test_every <= epochs
 
     train(
-        env=env,
-        test_env=gym.make(args.env),
+        env_fn=lambda: make_atari_env(args.env),
         model=model,
         seed=args.seed,
+        num_cpu=args.cpu,
         device=DEVICE,
         gamma=args.gamma,
+        use_gae=args.use_gae,
+        tau=args.tau,
+        max_grad_norm=args.max_grad_norm,
         learning_rate=args.learning_rate,
         value_loss_coef=args.value_loss_coef,
         policy_loss_coef=args.policy_loss_coef,
         entropy_loss_coef=args.entropy_loss_coef,
-        epochs=args.epochs,
+        epochs=epochs,
         steps_per_epoch=args.steps_per_epoch,
         episode_len_limit=args.episode_len_limit,
         save_every=save_every,
