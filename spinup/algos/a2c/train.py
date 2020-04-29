@@ -27,6 +27,7 @@ def train(env_fn,
           gamma=0.99,
           use_gae=True,
           tau=0.95,
+          max_grad_norm=None,
           polyak=0.995,
           learning_rate=1e-3,
           value_loss_coef=1,
@@ -113,7 +114,10 @@ def train(env_fn,
         loss.backward()
         if use_MPI:
             mpi_pytorch.mpi_avg_grads(actor_critic)
+
         # Optimize
+        if max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(actor_critic.parameters(), max_grad_norm)
         optimizer.step()
 
         # Log losses and info
@@ -194,12 +198,14 @@ def train(env_fn,
         solved = False
         if epoch % test_every == 0:
             # Test the performance of the deterministic version of the agent.
+            actor_critic.eval()
             episode_info = evaluate_agent(env=test_env,
                                           agent=actor_critic,
                                           deterministic=deterministic,
                                           num_episodes=num_test_episodes,
                                           episode_len_limit=test_episode_len_limit,
                                           render=False)
+            actor_critic.train()
             if solve_score is not None:
                 solved = all(r >= solve_score for (t, r) in episode_info)
 
@@ -232,6 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_hidden', type=int, default=2)
     parser.add_argument('--gamma', '-g', type=float, default=0.99)
     parser.add_argument('--tau', '-t', type=float, default=0.99)
+    parser.add_argument('--max_grad_norm', type=float, default=None)
     parser.add_argument('--use_gae', type=bool, default=True)
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
     parser.add_argument('--value_loss_coef', '-vl', type=float, default=1)
@@ -307,6 +314,7 @@ if __name__ == '__main__':
         gamma=args.gamma,
         use_gae=args.use_gae,
         tau=args.tau,
+        max_grad_norm=args.max_grad_norm,
         learning_rate=args.learning_rate,
         value_loss_coef=args.value_loss_coef,
         policy_loss_coef=args.policy_loss_coef,
