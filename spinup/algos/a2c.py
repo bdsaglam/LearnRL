@@ -165,16 +165,19 @@ def a2c(env_fn,
 
             # End of trajectory handling
             if done or episode_length > episode_len_limit:
-                logger.store(EpRet=episode_return, EpLen=episode_length)
-                # Reset env
-                obs = env.reset()
-                actor_critic.reset()
-                # Reset episode stats
-                episode_return = 0
-                episode_length = 0
                 break
 
         update(epoch_history)
+
+        # if done
+        if epoch_history.dones[-1]:
+            logger.store(EpRet=episode_return, EpLen=episode_length)
+            # Reset env
+            obs = env.reset()
+            actor_critic.reset()
+            # Reset episode stats
+            episode_return = 0
+            episode_length = 0
 
         # End of epoch handling
         if epoch % log_every == 0:

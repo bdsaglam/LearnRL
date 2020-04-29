@@ -36,7 +36,7 @@ class IAgentModel(IAgent, torch.nn.Module):
 
 class IActorCritic(IAgentModel):
     @abstractmethod
-    def predict_value(self, obs_tensor: torch.tensor, context: Any = None) -> torch.tensor:
+    def predict_value(self, obs_tensor: torch.tensor, context: Any) -> torch.tensor:
         pass
 
     @abstractmethod
