@@ -2,7 +2,7 @@ import pathlib
 
 import torch
 
-from spinup.algos.a2c.train import train
+from spinup.algos.a2c.a2c import a2c
 from spinup.constants import DEVICE
 from spinup.examples.atari.core import make_model
 from spinup.examples.atari.environment import make_atari_env
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     assert log_every <= epochs
     assert test_every <= epochs
 
-    train(
+    a2c(
         env_fn=lambda: make_atari_env(args.env),
         model=model,
         seed=args.seed,

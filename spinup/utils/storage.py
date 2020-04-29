@@ -37,7 +37,7 @@ class ReplayBuffer:
         return {k: torch.as_tensor(v) for k, v in batch.items()}
 
 
-class EpisodeBuffer:
+class EpisodeHistory:
     def __init__(self):
         self.observations = []
         self.actions = []

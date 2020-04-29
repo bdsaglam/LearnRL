@@ -8,7 +8,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('experiment_folder', type=str)
     parser.add_argument('--itr', '-i', type=int, default=-1)
-    parser.add_argument('--deterministic', '-d', action='store_true')
+    parser.add_argument('--non_deterministic', '-nd', action='store_true')
     parser.add_argument('--num_episodes', '-n', type=int, default=5)
     parser.add_argument('--episode_len_limit', '-l', type=int, default=None)
     parser.add_argument('--norender', '-nr', action='store_true')
@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     evaluate_agent(env,
                    agent,
-                   deterministic=args.deterministic,
+                   deterministic=not args.non_deterministic,
                    num_episodes=args.num_episodes,
                    episode_len_limit=args.episode_len_limit,
                    render=not args.norender)

@@ -1,5 +1,4 @@
 import gym
-import numpy as np
 from gym.spaces.box import Box
 
 
@@ -36,18 +35,3 @@ class CropImageWrapper(gym.ObservationWrapper):
 
     def observation(self, observation):
         return observation[self.row1:self.row2, self.col1:self.col2]
-
-
-class ConcatWrapper(gym.ObservationWrapper):
-    def __init__(self, env, axis):
-        super().__init__(env)
-        self.axis = axis
-
-        new_obs_shape = np.concatenate(np.empty(self.observation_space.shape), axis=axis).shape
-
-        observation_space = env.observation_space
-        observation_space.shape = new_obs_shape
-        self.observation_space = observation_space
-
-    def observation(self, observation):
-        return np.concatenate(observation, axis=self.axis)

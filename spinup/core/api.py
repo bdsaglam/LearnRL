@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Any, Dict
+
 import numpy as np
 import torch
 
@@ -20,10 +21,22 @@ class IAgentModel(IAgent, torch.nn.Module):
         # takes observation tensor and returns action tensor
         pass
 
+    @abstractmethod
+    def reset_for_training(self):
+        pass
+
+    @abstractmethod
+    def get_context(self) -> Any:
+        pass
+
+    @abstractmethod
+    def set_context(self, context: Any):
+        pass
+
 
 class IActorCritic(IAgentModel):
     @abstractmethod
-    def predict_value(self, obs_tensor: torch.tensor) -> torch.tensor:
+    def predict_value(self, obs_tensor: torch.tensor, context: Any = None) -> torch.tensor:
         pass
 
     @abstractmethod

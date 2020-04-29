@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ from spinup.core.bellman import generalized_advantage_estimate, calculate_return
 from spinup.utils import nn_utils
 
 
-class History:
+class TrainBuffer:
     def __init__(self):
         self.log_probs = []
         self.entropy = []
@@ -39,10 +40,18 @@ class ActorCritic(IActorCritic):
         self.critic1 = critic
         self.critic2 = deepcopy(critic)
 
-        self.train_history = History()
+        self.reset()
+        self.reset_for_training()
 
-    def reset(self):
-        self.train_history = History()
+    # IAgentModel conformance
+    def get_context(self) -> Any:
+        return None
+
+    def set_context(self, context) -> Any:
+        pass
+
+    def reset_for_training(self):
+        self.train_buffer = TrainBuffer()
 
     def step(self, obs_tensor):
         batch_obs = obs_tensor.unsqueeze(0)
@@ -54,7 +63,7 @@ class ActorCritic(IActorCritic):
         log_prob = dist.log_prob(action)
         entropy = dist.entropy()
 
-        self.train_history.store(
+        self.train_buffer.store(
             log_prob=log_prob,
             entropy=entropy,
             v1=v1,
@@ -63,9 +72,10 @@ class ActorCritic(IActorCritic):
 
         return action.squeeze(0)
 
-    def predict_value(self, obs_tensor):
-        batch_obs = obs_tensor.unsqueeze(0)
+    # IActorCritic conformance
+    def predict_value(self, obs_tensor, context=None):
         with torch.no_grad():
+            batch_obs = obs_tensor.unsqueeze(0)
             feature_tensor = self.feature_extractor(batch_obs)
             v1 = self.critic1(feature_tensor)
             v2 = self.critic2(feature_tensor)
@@ -90,7 +100,7 @@ class ActorCritic(IActorCritic):
 
         # all tensors have shape of (T, 1)
         # MSE loss against Bellman backup
-        batch_log_probs, batch_entropy, batch_v1, batch_v2 = self.train_history.data()
+        batch_log_probs, batch_entropy, batch_v1, batch_v2 = self.train_buffer.data()
         loss_v1 = (batch_return - batch_v1).pow(2).mean()
         loss_v2 = (batch_return - batch_v2).pow(2).mean()
         loss_v = value_loss_coef * (loss_v1 + loss_v2)
@@ -125,6 +135,10 @@ class ActorCritic(IActorCritic):
         )
 
         return loss, info
+
+    # IAgent conformance
+    def reset(self):
+        pass
 
     def act(self, obs, deterministic=False):
         obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(DEVICE)

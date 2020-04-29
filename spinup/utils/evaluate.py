@@ -2,14 +2,14 @@ import time
 
 import torch
 
-from spinup import EpochLogger
 from spinup.core.api import IAgent
+from spinup.utils.logx import EpochLogger
 
 
 def evaluate_agent(
         env,
         agent: IAgent,
-        deterministic=False,
+        deterministic=True,
         num_episodes=5,
         episode_len_limit=None,
         render=False,
