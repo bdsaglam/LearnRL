@@ -229,7 +229,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', '-s', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--env', type=str, default='CartPole-v1')
     parser.add_argument('--exp_name', type=str, default=None)
     parser.add_argument('--cpu', type=int, default=1)
