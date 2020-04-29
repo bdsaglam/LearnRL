@@ -295,7 +295,7 @@ if __name__ == '__main__':
     # Setup epoch number and action frequencies
     epochs = args.epochs // args.cpu
     save_every = args.save_every or max(10, epochs // 10)
-    log_every = args.log_every or max(10, epochs // 10)
+    log_every = args.log_every or max(10, epochs // 100)
     test_every = args.test_every or max(10, epochs // 10)
 
     assert save_every <= epochs
