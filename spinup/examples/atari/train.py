@@ -4,7 +4,7 @@ import torch
 
 from spinup.algos.a2c.train import train
 from spinup.constants import DEVICE
-from spinup.examples.atari import core
+from spinup.examples.atari.core import make_model
 from spinup.examples.atari.environment import make_atari_env
 from spinup.utils.experiment_utils import get_latest_saved_file
 
@@ -68,8 +68,7 @@ if __name__ == '__main__':
             p.requires_grad_()
         print("Loaded model from: ", saved_model_file)
     else:
-
-        model = core.make_model(
+        model = make_model(
             env,
             model_kwargs=dict(hidden_sizes=[args.hidden_size] * args.num_hidden),
         )
