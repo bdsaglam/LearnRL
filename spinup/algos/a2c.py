@@ -190,6 +190,8 @@ def a2c(env_fn,
 
         # End of epoch handling
         if epoch % log_every == 0:
+            total_interactions = mpi_tools.mpi_sum(total_steps) if use_MPI else total_steps
+
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)
@@ -200,7 +202,7 @@ def a2c(env_fn,
             logger.log_tabular('LossV', average_only=True)
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossEntropy', average_only=True)
-            logger.log_tabular('TotalEnvInteracts', total_steps * num_cpu)
+            logger.log_tabular('TotalEnvInteracts', total_interactions)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
 
