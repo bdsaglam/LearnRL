@@ -81,7 +81,7 @@ def a2c(env_fn,
 
     if test_episode_len_limit is None:
         test_episode_len_limit = episode_len_limit
-        
+
     # training model and target model
     actor_critic = model
     target_actor_critic = deepcopy(actor_critic)
@@ -206,8 +206,7 @@ def a2c(env_fn,
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)
             logger.log_tabular('EpLen', average_only=True)
-            logger.log_tabular('V1Vals', average_only=True)
-            logger.log_tabular('V2Vals', average_only=True)
+            logger.log_tabular('Value', average_only=True)
             logger.log_tabular('LogPi', with_min_and_max=True)
             logger.log_tabular('LossV', average_only=True)
             logger.log_tabular('LossPi', average_only=True)

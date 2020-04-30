@@ -32,7 +32,7 @@ class TrainBuffer:
         return batch_log_probs, batch_entropy, batch_v1, batch_v2
 
 
-class ActorCritic(IActorCritic):
+class ActorDoubleCritic(IActorCritic):
     def __init__(self, feature_extractor: nn.Module, actor: nn.Module, critic: nn.Module):
         super().__init__()
         self.feature_extractor = feature_extractor
@@ -129,8 +129,7 @@ class ActorCritic(IActorCritic):
             LossV=loss_v.detach().cpu().numpy(),
             LossPi=loss_pi.detach().cpu().numpy(),
             LossEntropy=loss_entropy.detach().cpu().numpy(),
-            V1Vals=batch_v1.detach().cpu().numpy(),
-            V2Vals=batch_v2.detach().cpu().numpy(),
+            Value=batch_value.detach().cpu().numpy(),
             LogPi=batch_log_probs.detach().cpu().numpy(),
         )
 
@@ -162,7 +161,7 @@ def make_model(env, model_kwargs):
     feature_extractor = torch.nn.Identity()
     actor_network = MLPCategoricalActor(feature_dim, act_dim, **model_kwargs)
     critic_network = MLPVFunction(feature_dim, **model_kwargs)
-    ac = ActorCritic(
+    ac = ActorDoubleCritic(
         feature_extractor=feature_extractor,
         actor=actor_network,
         critic=critic_network
