@@ -39,11 +39,14 @@ def a2c(env_fn,
         save_freq=1,
         solve_score=None,
         ):
+
     use_MPI = num_cpu > 1
 
     if use_MPI:
         # Special function to avoid certain slowdowns from PyTorch + MPI combo.
         mpi_pytorch.setup_pytorch_for_mpi()
+    else:
+        torch.set_num_threads(torch.get_num_threads())
 
     # Set up logger and save configuration
     logger = EpochLogger(**logger_kwargs)
