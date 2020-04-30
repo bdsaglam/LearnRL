@@ -75,9 +75,11 @@ def a2c(env_fn,
         # Sync params across processes
         mpi_pytorch.sync_params(actor_critic)
         mpi_pytorch.sync_params(target_actor_critic)
+
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
     for p in target_actor_critic.parameters():
         p.requires_grad = False
+
     # Utilize GPU
     actor_critic.to(device)
     target_actor_critic.to(device)
