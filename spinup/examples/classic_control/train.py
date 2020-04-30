@@ -43,6 +43,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if args.cpu > 1:
+        mpi_tools.mpi_fork(args.cpu, allow_run_as_root=args.allow_run_as_root)  # run parallel code with mpi
+
     # Setup experiment name
     env = gym.make(args.env)
 
@@ -50,8 +53,6 @@ if __name__ == '__main__':
 
     experiment_name = args.exp_name or env.spec.id
     logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
-
-    torch.set_num_threads(torch.get_num_threads())
 
     # Load or create model
     saved_model_file = None
@@ -83,9 +84,6 @@ if __name__ == '__main__':
     assert save_every <= epochs
     assert log_every <= epochs
     assert test_every <= epochs
-
-    if args.cpu > 1:
-        mpi_tools.mpi_fork(args.cpu, allow_run_as_root=args.allow_run_as_root)  # run parallel code with mpi
 
     a2c(
         env_fn=lambda: gym.make(args.env),
