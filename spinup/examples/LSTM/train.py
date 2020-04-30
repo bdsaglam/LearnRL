@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_test_episodes', type=int, default=5)
     parser.add_argument('--test_episode_len_limit', type=int, default=None)
     parser.add_argument('--deterministic', '-d', action='store_true')
-    parser.add_argument('--solve_score', type=int, default=None)
+    parser.add_argument('--solved_score', type=int, default=None)
 
     args = parser.parse_args()
 
@@ -114,5 +114,5 @@ if __name__ == '__main__':
         num_test_episodes=args.num_test_episodes,
         test_episode_len_limit=args.test_episode_len_limit,
         deterministic=args.deterministic,
-        solve_score=args.solve_score,
+        solved_score=args.solved_score,
     )

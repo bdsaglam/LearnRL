@@ -38,7 +38,7 @@ def a2c(env_fn,
         test_episode_len_limit=None,
         deterministic=False,
         save_freq=1,
-        solve_score=None,
+        solved_score=None,
         ):
     use_MPI = num_cpu > 1
 
@@ -230,8 +230,8 @@ def a2c(env_fn,
                                           logger=test_logger)
             actor_critic.train()
             actor_critic.set_context(context)
-            if solve_score is not None:
-                solved = all(r >= solve_score for (t, r) in episode_info)
+            if solved_score is not None:
+                solved = all(r >= solved_score for (t, r) in episode_info)
 
         # Save model
         if (epoch % save_every == 0) or (epoch == epochs) or solved:
