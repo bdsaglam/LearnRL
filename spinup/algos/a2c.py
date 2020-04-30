@@ -20,7 +20,7 @@ def a2c(env_fn,
         device=torch.device("cpu"),
         epochs=1000,
         steps_per_epoch=10,
-        episode_len_limit=1000,
+        episode_len_limit=None,
         gamma=0.99,
         use_gae=True,
         tau=0.95,
@@ -72,6 +72,16 @@ def a2c(env_fn,
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.n
 
+    # episode length limit
+    if episode_len_limit is None:
+        if env.unwrapped.spec and env.unwrapped.spec.max_episode_steps:
+            episode_len_limit = env.spec.max_episode_steps
+        else:
+            raise ValueError("Episode length limit must be specified")
+
+    if test_episode_len_limit is None:
+        test_episode_len_limit = episode_len_limit
+        
     # training model and target model
     actor_critic = model
     target_actor_critic = deepcopy(actor_critic)

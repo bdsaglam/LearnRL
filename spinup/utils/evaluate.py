@@ -20,14 +20,14 @@ def evaluate_agent(
         "and we can't run the agent in it. :( \n\n Check out the readthedocs " + \
         "page on Experiment Outputs for how to handle this situation."
 
-    if logger is None:
-        logger = EpochLogger()
-
     if episode_len_limit is None:
-        if env.spec and env.spec.max_episode_steps:
+        if env.unwrapped.spec and env.unwrapped.spec.max_episode_steps:
             episode_len_limit = env.spec.max_episode_steps
         else:
-            episode_len_limit = 1000
+            raise ValueError("Episode length limit must be specified")
+
+    if logger is None:
+        logger = EpochLogger()
 
     episode_info = []
     for _ in range(num_episodes):

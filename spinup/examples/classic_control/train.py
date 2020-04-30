@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--entropy_loss_coef', '-el', type=float, default=1)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--steps_per_epoch', type=int, default=64)
-    parser.add_argument('--episode_len_limit', type=int, default=1000)
+    parser.add_argument('--episode_len_limit', type=int, default=None)
     parser.add_argument('--continue_training', '-c', action='store_true')
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
     parser.add_argument('--save_every', type=int, default=None)
