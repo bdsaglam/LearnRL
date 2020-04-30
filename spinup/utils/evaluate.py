@@ -13,18 +13,22 @@ def evaluate_agent(
         num_episodes=5,
         episode_len_limit=None,
         render=False,
-        logger=EpochLogger()
+        logger=None
 ):
     assert env is not None, \
         "Environment not found!\n\n It looks like the environment wasn't saved, " + \
         "and we can't run the agent in it. :( \n\n Check out the readthedocs " + \
         "page on Experiment Outputs for how to handle this situation."
 
+    if logger is None:
+        logger = EpochLogger()
+
     if episode_len_limit is None:
         if env.spec and env.spec.max_episode_steps:
             episode_len_limit = env.spec.max_episode_steps
         else:
             episode_len_limit = 1000
+
     episode_info = []
     for _ in range(num_episodes):
         obs = env.reset()
