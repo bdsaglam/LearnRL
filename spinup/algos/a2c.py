@@ -1,3 +1,4 @@
+import pathlib
 import time
 from copy import deepcopy
 
@@ -7,9 +8,9 @@ from torch.optim import Adam
 
 from spinup.core.api import IActorCritic
 from spinup.utils import mpi_tools, mpi_pytorch
-from spinup.utils.storage import EpisodeHistory
 from spinup.utils.evaluate import evaluate_agent
 from spinup.utils.logx import EpochLogger
+from spinup.utils.storage import EpisodeHistory
 
 
 def a2c(env_fn,
@@ -39,7 +40,6 @@ def a2c(env_fn,
         save_freq=1,
         solve_score=None,
         ):
-
     use_MPI = num_cpu > 1
 
     if use_MPI:
@@ -55,6 +55,10 @@ def a2c(env_fn,
     del config['model']
     del config['logger']
     logger.save_config(config)
+
+    test_logger_kwargs = deepcopy(logger_kwargs)
+    test_logger_kwargs['output_dir'] = pathlib.Path(test_logger_kwargs['output_dir']) / 'evaluation'
+    test_logger = EpochLogger(**test_logger_kwargs)
 
     # Random seed
     if use_MPI:
@@ -211,7 +215,8 @@ def a2c(env_fn,
                                           deterministic=deterministic,
                                           num_episodes=num_test_episodes,
                                           episode_len_limit=test_episode_len_limit,
-                                          render=False)
+                                          render=False,
+                                          logger=test_logger)
             actor_critic.train()
             actor_critic.set_context(context)
             if solve_score is not None:
