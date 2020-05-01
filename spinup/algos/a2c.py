@@ -19,17 +19,17 @@ def a2c(env_fn,
         num_cpu=1,
         device=torch.device("cpu"),
         epochs=1000,
-        steps_per_epoch=10,
+        steps_per_epoch=100,
         episode_len_limit=None,
         gamma=0.99,
         use_gae=True,
         tau=0.95,
-        max_grad_norm=None,
+        max_grad_norm=0.5,
         polyak=0.995,
         learning_rate=1e-3,
-        value_loss_coef=1,
+        value_loss_coef=0.5,
         policy_loss_coef=1,
-        entropy_loss_coef=1,
+        entropy_loss_coef=0.1,
         save_every=100,
         log_every=10,
         logger_kwargs=dict(),
@@ -235,7 +235,7 @@ def a2c(env_fn,
 
         # Save model
         if (epoch % save_every == 0) or (epoch == epochs) or solved:
-            logger.save_state({'env': env}, None)
+            logger.save_state({'env': env})
 
         # Check environment is solved
         if solved:
@@ -247,3 +247,31 @@ def a2c(env_fn,
             plog(f'    Time {time.time() - start_time}')
             plog(f'    Epoch {epoch}')
             break
+
+
+def get_arg_parser():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--cpu', type=int, default=1)
+    parser.add_argument('--epochs', type=int, default=1000)
+    parser.add_argument('--steps_per_epoch', type=int, default=100)
+    parser.add_argument('--episode_len_limit', type=int, default=None)
+    parser.add_argument('--gamma', '-g', type=float, default=0.99)
+    parser.add_argument('--tau', '-t', type=float, default=0.99)
+    parser.add_argument('--max_grad_norm', type=float, default=0.5)
+    parser.add_argument('--use_gae', type=bool, default=True)
+    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
+    parser.add_argument('--value_loss_coef', '-vl', type=float, default=0.5)
+    parser.add_argument('--policy_loss_coef', '-pl', type=float, default=1)
+    parser.add_argument('--entropy_loss_coef', '-el', type=float, default=0.1)
+    parser.add_argument('--save_every', type=int, default=None)
+    parser.add_argument('--log_every', type=int, default=None)
+    parser.add_argument('--test_every', type=int, default=None)
+    parser.add_argument('--num_test_episodes', type=int, default=5)
+    parser.add_argument('--test_episode_len_limit', type=int, default=None)
+    parser.add_argument('--deterministic', '-d', action='store_true')
+    parser.add_argument('--solved_score', type=int, default=None)
+
+    return parser
