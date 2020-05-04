@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from spinup.algos.a2c.core import ActorCritic
 from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
+from spinup.examples.classic_control.core import ActorDoubleCritic
 from spinup.utils import nn_utils
 
 
@@ -35,14 +35,18 @@ def make_model(env, model_kwargs):
     feature_extractor, feature_dim = make_feature_extractor(env.observation_space.shape)
     actor_network = MLPCategoricalActor(feature_dim, act_dim, **model_kwargs)
     critic_network = MLPVFunction(feature_dim, **model_kwargs)
-    ac = ActorCritic(
+    ac = ActorDoubleCritic(
         feature_extractor=feature_extractor,
         actor=actor_network,
         critic=critic_network
     )
 
-    # Count variables (protip: try to get a feel for how different size networks behave!)
-    var_counts = tuple(nn_utils.count_vars(module) for module in [actor_network, critic_network])
-    print('\nNumber of parameters: \t actor: %d, \t critic: %d\n' % var_counts)
+    # Count variables (pro-tip: try to get a feel for how different size networks behave!)
+    print('\nNumber of parameters')
+    print('-' * 32)
+    print(f'Feature extractor: \t {nn_utils.count_vars(feature_extractor):d}')
+    print(f'Actor network: \t {nn_utils.count_vars(actor_network):d}')
+    print(f'Critic network: \t {nn_utils.count_vars(critic_network):d}')
+    print(f'Agent: \t {nn_utils.count_vars(ac):d}')
 
     return ac

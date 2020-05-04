@@ -2,8 +2,7 @@ import gym
 import numpy as np
 from gym.wrappers import AtariPreprocessing, FrameStack, TransformObservation
 
-from spinup.utils.atari_wrappers import FireReset
-from spinup.utils.env_wrappers import PyTorchImageWrapper, ConcatWrapper
+from spinup.wrappers import PyTorchImageWrapper, ConcatWrapper, FireReset
 
 
 def make_atari_env(env_name):
@@ -15,7 +14,7 @@ def make_atari_env(env_name):
         frame_skip=2,
         screen_size=84,
         terminal_on_life_loss=False,
-        grayscale_obs=False,
+        grayscale_obs=True,
         scale_obs=False
     )
     env = PyTorchImageWrapper(env)

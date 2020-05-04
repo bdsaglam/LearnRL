@@ -2,43 +2,23 @@ import pathlib
 
 import torch
 
-from spinup.algos.a2c.a2c import a2c
+from spinup import a2c
+from spinup.algos.a2c import get_arg_parser
 from spinup.constants import DEVICE
 from spinup.examples.atari.core import make_model
 from spinup.examples.atari.environment import make_atari_env
 from spinup.utils.experiment_utils import get_latest_saved_file
 
 if __name__ == '__main__':
-    import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=0)
+    parser = get_arg_parser()
     parser.add_argument('--env', type=str, default='BreakoutNoFrameskip-v4')
     parser.add_argument('--exp_name', type=str, default=None)
-    parser.add_argument('--cpu', type=int, default=1)
     parser.add_argument('--allow_run_as_root', action='store_true')
-    parser.add_argument('--hidden_size', type=int, default=64)
+    parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--num_hidden', type=int, default=1)
-    parser.add_argument('--gamma', '-g', type=float, default=0.99)
-    parser.add_argument('--tau', '-t', type=float, default=0.99)
-    parser.add_argument('--max_grad_norm', type=float, default=None)
-    parser.add_argument('--use_gae', type=bool, default=True)
-    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
-    parser.add_argument('--value_loss_coef', '-vl', type=float, default=1)
-    parser.add_argument('--policy_loss_coef', '-pl', type=float, default=1)
-    parser.add_argument('--entropy_loss_coef', '-el', type=float, default=1)
-    parser.add_argument('--epochs', type=int, default=1000)
-    parser.add_argument('--steps_per_epoch', type=int, default=64)
-    parser.add_argument('--episode_len_limit', type=int, default=None)
     parser.add_argument('--continue_training', '-c', action='store_true')
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
-    parser.add_argument('--save_every', type=int, default=None)
-    parser.add_argument('--log_every', type=int, default=None)
-    parser.add_argument('--test_every', type=int, default=None)
-    parser.add_argument('--num_test_episodes', type=int, default=5)
-    parser.add_argument('--test_episode_len_limit', type=int, default=None)
-    parser.add_argument('--deterministic', '-d', action='store_true')
-    parser.add_argument('--solve_score', type=int, default=None)
 
     args = parser.parse_args()
 
@@ -107,5 +87,5 @@ if __name__ == '__main__':
         num_test_episodes=args.num_test_episodes,
         test_episode_len_limit=args.test_episode_len_limit,
         deterministic=args.deterministic,
-        solve_score=args.solve_score,
+        solved_score=args.solved_score,
     )
