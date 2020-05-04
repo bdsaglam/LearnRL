@@ -8,13 +8,17 @@ class PyTorchImageWrapper(gym.ObservationWrapper):
         obs_shape = self.observation_space.shape
         h, w = obs_shape[0], obs_shape[1]
         if len(obs_shape) == 3:
+            low = self.observation_space.low[0, 0, 0]
+            high = self.observation_space.high[0, 0, 0]
             c = obs_shape[2]
         else:
+            low = self.observation_space.low[0, 0]
+            high = self.observation_space.high[0, 0]
             c = 1
 
         self.observation_space = Box(
-            low=self.observation_space.low[0, 0, 0],
-            high=self.observation_space.high[0, 0, 0],
+            low=low,
+            high=high,
             shape=[c, h, w],
             dtype=self.observation_space.dtype)
 
