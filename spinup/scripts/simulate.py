@@ -9,7 +9,7 @@ if __name__ == '__main__':
     parser.add_argument('experiment_folder', type=str)
     parser.add_argument('--itr', '-i', type=int, default=-1)
     parser.add_argument('--non_deterministic', '-nd', action='store_true')
-    parser.add_argument('--num_episodes', '-n', type=int, default=5)
+    parser.add_argument('--num_episodes', '-n', type=int, default=3)
     parser.add_argument('--episode_len_limit', '-l', type=int, default=None)
     parser.add_argument('--norender', '-nr', action='store_true')
     args = parser.parse_args()
