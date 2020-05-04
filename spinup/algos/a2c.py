@@ -69,7 +69,7 @@ def a2c(env_fn,
     # Instantiate environment
     env = env_fn()
     test_env = env_fn()
-    obs_dim = env.observation_space.shape[0]
+    obs_shape = env.observation_space.shape
     act_dim = env.action_space.n
 
     # episode length limit
@@ -110,9 +110,9 @@ def a2c(env_fn,
             next_value = 0.0
         else:
             last_obs = episode_buffer.next_observations[-1]
-            last_obs_tensor = torch.tensor(last_obs, dtype=torch.float32).to(device)
+            last_obs_tensor = torch.tensor(last_obs, dtype=torch.float32).unsqueeze(0)
             context = actor_critic.get_context()
-            next_value = target_actor_critic.predict_value(last_obs_tensor, context).cpu().item()
+            next_value = target_actor_critic.predict_value(last_obs_tensor, context=context).cpu().item()
 
         # Super critical!!
         optimizer.zero_grad()
@@ -167,7 +167,7 @@ def a2c(env_fn,
             total_steps += 1
 
             # Get action from the model
-            obs_tensor = torch.tensor(obs, dtype=torch.float32).to(device)
+            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
             action = actor_critic.step(obs_tensor)
 
             # Step the env
