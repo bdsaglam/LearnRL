@@ -7,7 +7,7 @@ import torch
 
 class IAgent(ABC):
     @abstractmethod
-    def act(self, *obs, deterministic=False):
+    def act(self, obs, deterministic=False):
         pass
 
     @abstractmethod
@@ -17,7 +17,7 @@ class IAgent(ABC):
 
 class IAgentModel(IAgent, torch.nn.Module):
     @abstractmethod
-    def step(self, *obs_tensors: torch.tensor) -> torch.tensor:
+    def step(self, obs_tensor: torch.tensor) -> torch.tensor:
         # takes observation tensors and returns action tensor
         pass
 
@@ -39,7 +39,7 @@ class IAgentModel(IAgent, torch.nn.Module):
 
 class IActorCritic(IAgentModel):
     @abstractmethod
-    def predict_value(self, *obs_tensors: torch.tensor, context: Any) -> torch.tensor:
+    def predict_value(self, obs_tensor: torch.tensor, context: Any) -> torch.tensor:
         pass
 
     @abstractmethod
