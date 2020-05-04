@@ -4,7 +4,6 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from spinup.constants import DEVICE
 from spinup.core.api import IActorCritic
 from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
 from spinup.core.bellman import generalized_advantage_estimate, calculate_returns
@@ -54,8 +53,11 @@ class ActorDoubleCritic(IActorCritic):
         self.train_buffer = TrainBuffer()
 
     def step(self, obs_tensor):
-        batch_obs = obs_tensor.unsqueeze(0)
-        feature_tensor = self.feature_extractor(batch_obs)
+        # all tensors must be provided in batches
+        device = self.get_device()
+
+        obs_tensor = obs_tensor.to(device)
+        feature_tensor = self.feature_extractor(obs_tensor)
         v1 = self.critic1(feature_tensor)
         v2 = self.critic2(feature_tensor)
         dist = self.actor(feature_tensor)
@@ -70,17 +72,20 @@ class ActorDoubleCritic(IActorCritic):
             v2=v2,
         )
 
-        return action.squeeze(0)
+        return action
 
     # IActorCritic conformance
     def predict_value(self, obs_tensor, context=None):
+        # all tensors must be provided in batches
+        device = self.get_device()
+
+        obs_tensor = obs_tensor.to(device)
         with torch.no_grad():
-            batch_obs = obs_tensor.unsqueeze(0)
-            feature_tensor = self.feature_extractor(batch_obs)
+            feature_tensor = self.feature_extractor(obs_tensor)
             v1 = self.critic1(feature_tensor)
             v2 = self.critic2(feature_tensor)
             v = torch.min(v1, v2)
-        return v.squeeze(0)
+        return v
 
     def compute_loss(self,
                      rewards,
@@ -93,10 +98,12 @@ class ActorDoubleCritic(IActorCritic):
                      policy_loss_coef=1,
                      entropy_reg_coef=1
                      ):
+        device = self.get_device()
+
         returns = calculate_returns(rewards=rewards,
                                     next_value=next_value,
                                     discount_factor=discount_factor)
-        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0).to(device)
 
         # all tensors have shape of (T, 1)
         # MSE loss against Bellman backup
@@ -113,7 +120,7 @@ class ActorDoubleCritic(IActorCritic):
                                                         next_value=next_value,
                                                         discount_factor=discount_factor,
                                                         tau=tau)
-            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0).to(device)
         else:
             batch_advantage = batch_return - batch_value
         loss_pi = -policy_loss_coef * (batch_advantage * batch_log_probs).mean()
@@ -140,7 +147,10 @@ class ActorDoubleCritic(IActorCritic):
         pass
 
     def act(self, obs, deterministic=False):
-        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+        # all tensors must be provided in batches
+        device = self.get_device()
+
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device)
         with torch.no_grad():
             feature = self.feature_extractor(obs_tensor)
             dist = self.actor(feature)
