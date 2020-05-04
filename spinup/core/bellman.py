@@ -4,7 +4,7 @@ import scipy.signal
 
 def discounted_reward_sum(rewards, discount_factor):
     """
-    Calculates discounted cumulative sum of an array.
+    Calculates discounted cumulative reward.
 
     :param rewards: array of reward value for each time step
     :param discount_factor: discount factor [0, 1]
