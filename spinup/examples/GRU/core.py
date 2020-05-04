@@ -4,11 +4,11 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from spinup.constants import DEVICE
 from spinup.core.api import IActorCritic
 from spinup.core.approximators import MLPCategoricalActor, MLPVFunction
 from spinup.core.bellman import generalized_advantage_estimate, calculate_returns
 from spinup.utils import nn_utils
+from spinup.utils.general_utils import prod
 
 
 class TrainBuffer:
@@ -44,14 +44,31 @@ class GRUActorCritic(IActorCritic):
         self.reset()
         self.reset_for_training()
 
+    def reset(self):
+        self.hx = torch.zeros(1, self.gru_cell.hidden_size, dtype=torch.float32)
+
     def reset_for_training(self):
         self.train_buffer = TrainBuffer()
         self.hx = self.hx.detach()
 
+    def get_context(self) -> Any:
+        return self.hx
+
+    def set_context(self, context) -> Any:
+        self.hx = context
+
+    def send_context_to(self, device):
+        self.hx = self.hx.to(device)
+
     def step(self, obs_tensor):
-        batch_obs = obs_tensor.unsqueeze(0)
-        batch_feature = self.feature_extractor(batch_obs)
-        self.hx = self.gru_cell(batch_feature, self.hx)
+        # all tensors must be provided in batches
+        device = self.get_device()
+
+        self.send_context_to(device)
+
+        obs_tensor = obs_tensor.to(device)
+        feature_tensor = self.feature_extractor(obs_tensor)
+        self.hx = self.gru_cell(feature_tensor, self.hx)
         v1 = self.critic1(self.hx)
         v2 = self.critic2(self.hx)
         dist = self.actor(self.hx)
@@ -66,24 +83,24 @@ class GRUActorCritic(IActorCritic):
             v2=v2,
         )
 
-        return action.squeeze(0)
+        return action
 
-    def get_context(self) -> Any:
-        return self.hx
-
-    def set_context(self, context) -> Any:
-        self.hx = context
-
-    def predict_value(self, obs_tensor, context):
+    def predict_value(self, *obs_tensors, context):
+        obs_tensor = obs_tensors[0]
         hx = context
+
+        # all tensors must be provided in batches
+        device = self.get_device()
+
+        obs_tensor = obs_tensor.to(device)
+        hx = hx.to(device)
         with torch.no_grad():
-            batch_obs = obs_tensor.unsqueeze(0)
-            feature_tensor = self.feature_extractor(batch_obs)
+            feature_tensor = self.feature_extractor(obs_tensor)
             hx = self.gru_cell(feature_tensor, hx)
             v1 = self.critic1(hx)
             v2 = self.critic2(hx)
             v = torch.min(v1, v2)
-        return v.squeeze(0)
+        return v
 
     def compute_loss(self,
                      rewards,
@@ -96,10 +113,12 @@ class GRUActorCritic(IActorCritic):
                      policy_loss_coef=1,
                      entropy_reg_coef=1
                      ):
+        device = self.get_device()
+
         returns = calculate_returns(rewards=rewards,
                                     next_value=next_value,
                                     discount_factor=discount_factor)
-        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+        batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(0).to(device)
 
         # all tensors have shape of (T, 1)
         # MSE loss against Bellman backup
@@ -116,7 +135,7 @@ class GRUActorCritic(IActorCritic):
                                                         next_value=next_value,
                                                         discount_factor=discount_factor,
                                                         tau=tau)
-            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+            batch_advantage = torch.tensor(advantages, dtype=torch.float32).unsqueeze(0).to(device)
         else:
             batch_advantage = batch_return - batch_value
         loss_pi = -policy_loss_coef * (batch_advantage * batch_log_probs).mean()
@@ -139,13 +158,12 @@ class GRUActorCritic(IActorCritic):
 
         return loss, info
 
-    def reset(self):
-        self.hx = torch.zeros(1, self.gru_cell.hidden_size, dtype=torch.float32)
-
     def act(self, obs, deterministic=False):
-        batch_obs = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+        device = self.get_device()
+
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device)
         with torch.no_grad():
-            feature_tensor = self.feature_extractor(batch_obs)
+            feature_tensor = self.feature_extractor(obs_tensor)
             self.hx = self.gru_cell(feature_tensor, self.hx)
             dist = self.actor(self.hx)
             if deterministic:
@@ -157,11 +175,11 @@ class GRUActorCritic(IActorCritic):
 
 
 def make_model(env, rnn_hidden_size, actor_hidden_sizes, critic_hidden_sizes):
-    obs_dim = env.observation_space.shape[0]
+    obs_dim = prod(env.observation_space.shape)
     act_dim = env.action_space.n
 
     # Create actor-critic module and target networks
-    feature_extractor = torch.nn.Identity()
+    feature_extractor = torch.nn.Flatten()
     feature_dim = obs_dim
     gru_cell = nn.GRUCell(feature_dim, hidden_size=rnn_hidden_size)
     actor_network = MLPCategoricalActor(rnn_hidden_size, act_dim, hidden_sizes=actor_hidden_sizes)
@@ -176,5 +194,14 @@ def make_model(env, rnn_hidden_size, actor_hidden_sizes, critic_hidden_sizes):
     # Count variables (protip: try to get a feel for how different size networks behave!)
     var_counts = tuple(nn_utils.count_vars(module) for module in [actor_network, critic_network])
     print('\nNumber of parameters: \t actor: %d, \t critic: %d\n' % var_counts)
+
+    # Count variables (pro-tip: try to get a feel for how different size networks behave!)
+    print('\nNumber of parameters')
+    print('-' * 32)
+    print(f'Feature extractor: \t {nn_utils.count_vars(feature_extractor):d}')
+    print(f'GRU cell: \t {nn_utils.count_vars(gru_cell):d}')
+    print(f'Actor network: \t {nn_utils.count_vars(actor_network):d}')
+    print(f'Critic network: \t {nn_utils.count_vars(critic_network):d}')
+    print(f'Actor-Critic agent: \t {nn_utils.count_vars(ac):d}')
 
     return ac
