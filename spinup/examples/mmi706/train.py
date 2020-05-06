@@ -42,6 +42,7 @@ def a2c(env_fn,
         deterministic=False,
         save_freq=1,
         solved_score=None,
+        render=False,
         ):
     use_MPI = num_cpu > 1
 
@@ -126,7 +127,7 @@ def a2c(env_fn,
                                         value_loss_coef=value_loss_coef,
                                         policy_loss_coef=policy_loss_coef,
                                         entropy_reg_coef=entropy_loss_coef,
-                                        grid_layer_weight_reg_loss_coef=grid_layer_weight_reg_loss_coef)
+                                        grid_layer_wreg_loss_coef=grid_layer_weight_reg_loss_coef)
         loss.backward()
         if use_MPI:
             mpi_pytorch.mpi_avg_grads(agent)
@@ -177,11 +178,14 @@ def a2c(env_fn,
 
             # Step the env
             obs2, reward, done, _ = env.step(action.detach().cpu().item())
+            if render and mpi_tools.proc_id() == 0:
+                env.render('human', view='top')
+                time.sleep(1e-3)
             episode_return += reward
             episode_length += 1
 
             # Store transition to history
-            epoch_history.store(observation=obs, action=action, reward=reward, done=done, next_observation=obs2)
+            epoch_history.store(observation=None, action=None, reward=reward, done=done, next_observation=obs2)
 
             # Super critical, easy to overlook step: make sure to update
             # most recent observation!
@@ -219,6 +223,7 @@ def a2c(env_fn,
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossEntropy', average_only=True)
             logger.log_tabular('LossGridL2', average_only=True)
+            logger.log_tabular('LossRecons', average_only=True)
             logger.log_tabular('TotalEnvInteracts', total_interactions)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
@@ -288,6 +293,7 @@ if __name__ == '__main__':
     parser.add_argument('--solved_score', type=int, default=None)
     parser.add_argument('--continue_training', '-c', action='store_true')
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
+    parser.add_argument('--render', action='store_true')
 
     args = parser.parse_args()
 
@@ -362,4 +368,5 @@ if __name__ == '__main__':
         num_test_episodes=args.num_test_episodes,
         deterministic=args.deterministic,
         solved_score=args.solved_score,
+        render=args.render,
     )
