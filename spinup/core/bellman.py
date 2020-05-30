@@ -50,6 +50,8 @@ def calculate_batch_returns(rewards: np.ndarray,
 
     # Bellman backup for Q function
     # Q(s_t,a_t) = R_t + gamma * V(s_t+1)
+    # TODO: this seems wrong
+    # slices must be [:, i]
     returns = np.zeros_like(rewards)
     for i in reversed(range(num_steps)):
         returns[i] = rewards[i] + discount_factor * (1 - dones[i]) * next_value
