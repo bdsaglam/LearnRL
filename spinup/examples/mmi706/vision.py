@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from capsnet import CapsNet
 
 
-class CNNVisionModule(nn.Module):
+class MockVisionModule(nn.Module):
     def __init__(self, input_shape):
         super().__init__()
         c, h, w = input_shape
@@ -21,13 +21,14 @@ class CNNVisionModule(nn.Module):
             nn.Flatten()
         )
         with torch.no_grad():
-            self.output_shape = self.network(torch.rand(1, c, h, w)).squeeze(0).shape
+            image = torch.rand(1, c, h, w)
+            self.output_shape = self.network(image).squeeze(0).shape
 
     def forward(self, image):
         return self.network(image), image
 
-    def reconstruction_loss(self, image, reconstruction):
-        return torch.tensor(0, dtype=torch.float32).to(image.device)
+    def loss(self, image, result):
+        return torch.zeros_like(image)
 
 
 class CapsuleVisionModule(nn.Module):
@@ -44,7 +45,6 @@ class CapsuleVisionModule(nn.Module):
                  obj_out_channels=16
                  ):
         super().__init__()
-        c, h, w = input_shape
         self.network = CapsNet(
             input_shape,
             cnn_out_channels=cnn_out_channels,
@@ -59,7 +59,8 @@ class CapsuleVisionModule(nn.Module):
         )
 
         with torch.no_grad():
-            obj_vectors, reconstruction, masks = self.network(torch.rand(1, c, h, w))
+            image = torch.rand(1, *input_shape)
+            obj_vectors, reconstruction, masks = self.network(image)
             self.output_shape = obj_vectors.squeeze(0).view(-1).shape
 
     def forward(self, image):
@@ -67,10 +68,40 @@ class CapsuleVisionModule(nn.Module):
         obj_vectors, reconstruction, masks = self.network(image)
         return obj_vectors.view(batch_size, -1), reconstruction
 
-    def reconstruction_loss(self, image, reconstruction):
+    def loss(self, image, result):
         batch_size = image.shape[0]
+        _, reconstruction = result
         loss = F.mse_loss(
             reconstruction.view(batch_size, -1),
             image.reshape(batch_size, -1)
         )
         return loss
+
+
+class VQVAEVisionModule(nn.Module):
+    def __init__(self, vqvae):
+        super().__init__()
+        self.vqvae = vqvae
+
+        with torch.no_grad():
+            image = torch.rand(1, vqvae.input_shape)
+            self.output_shape = self.forward(image).squeeze(0).shape
+
+    def forward(self, image):
+        batch_size = image.shape[0]
+        res = self.vqvae.encode(image)
+        return res.quantized.view(batch_size, -1), res.vq_loss, res.rec
+
+    def loss(self, image, result):
+        quantized, vq_loss, rec = result
+        rec_loss = self.vqvae.reconstruction_loss(rec, image)
+        return rec_loss + vq_loss
+
+
+def make_vision_module(model_type, checkpoint_filepath, device):
+    if model_type == 'VQVAE':
+        vqvae = torch.load(checkpoint_filepath, map_location=device)
+        return VQVAEVisionModule(vqvae)
+
+    if model_type == 'Capsule':
+        return torch.load(checkpoint_filepath, map_location=device)

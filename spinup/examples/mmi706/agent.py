@@ -8,7 +8,7 @@ from spinup.core.bellman import calculate_returns, \
     generalized_advantage_estimate
 from spinup.examples.mmi706.actor_critic import ActorCriticModule
 from spinup.examples.mmi706.path_integration import PathIntegrationModule
-from spinup.examples.mmi706.vision import CNNVisionModule, CapsuleVisionModule
+from spinup.examples.mmi706.vision import MockVisionModule, CapsuleVisionModule
 from spinup.utils import nn_utils
 
 
@@ -18,28 +18,31 @@ class TrainBuffer:
         self.entropy = []
         self.v1 = []
         self.v2 = []
-        self.reconstruction_loss = []
+        self.vision_loss = []
+        self.pim_loss = []
 
-    def store(self, log_prob, entropy, v1, v2, reconstruction_loss):
+    def store(self, log_prob, entropy, v1, v2, vision_loss, pim_loss):
         self.log_probs.append(log_prob)
         self.entropy.append(entropy)
         self.v1.append(v1)
         self.v2.append(v2)
-        self.reconstruction_loss.append(reconstruction_loss)
+        self.vision_loss.append(vision_loss)
+        self.pim_loss.append(pim_loss)
 
     def data(self):
         batch_log_probs = torch.cat(self.log_probs, 0)
         batch_entropy = torch.cat(self.entropy, 0)
         batch_v1 = torch.cat(self.v1, 0)
         batch_v2 = torch.cat(self.v2, 0)
-        batch_reconstruction_loss = torch.cat(self.reconstruction_loss, 0)
+        batch_vision_loss = torch.cat(self.vision_loss, 0)
+        batch_pim_loss = torch.cat(self.pim_loss, 0)
         return (batch_log_probs, batch_entropy, batch_v1, batch_v2,
-                batch_reconstruction_loss)
+                batch_vision_loss, batch_pim_loss)
 
 
 class Agent(nn.Module):
     def __init__(self,
-                 vision_module: (CNNVisionModule, CapsuleVisionModule),
+                 vision_module: (MockVisionModule, CapsuleVisionModule),
                  path_integration_module: PathIntegrationModule,
                  actor_critic_module: ActorCriticModule
                  ):
@@ -54,6 +57,7 @@ class Agent(nn.Module):
     def reset(self):
         self.previous_action_embedding = self.encode_action(None)
         self.current_grid_code = self.path_integration_module.initial_grid_code()
+        self.visual_feature_prediction = None
         self.pim_hx, self.pim_cx = self.path_integration_module.initial_hidden_state()
         self.ac_hx, self.ac_cx = self.actor_critic_module.initial_hidden_state()
 
@@ -63,6 +67,7 @@ class Agent(nn.Module):
         self.previous_action_embedding = self.previous_action_embedding.detach()
 
         self.current_grid_code = self.current_grid_code.detach()
+        self.visual_feature_prediction = None
         self.pim_hx = self.pim_hx.detach()
         self.pim_cx = self.pim_cx.detach()
 
@@ -72,12 +77,14 @@ class Agent(nn.Module):
     def get_context(self) -> Any:
         return (self.previous_action_embedding,
                 self.current_grid_code,
+                self.visual_feature_prediction,
                 (self.pim_hx, self.pim_cx),
                 (self.ac_hx, self.ac_cx))
 
     def set_context(self, context) -> Any:
         (self.previous_action_embedding,
          self.current_grid_code,
+         self.visual_feature_prediction,
          (self.pim_hx, self.pim_cx),
          (self.ac_hx, self.ac_cx)) = context
 
@@ -96,6 +103,8 @@ class Agent(nn.Module):
         self.previous_action_embedding = self.previous_action_embedding.to(
             device)
         self.current_grid_code = self.current_grid_code.to(device)
+        if self.visual_feature_prediction is not None:
+            self.visual_feature_prediction = self.visual_feature_prediction.to(device)
         self.pim_hx = self.pim_hx.to(device)
         self.pim_cx = self.pim_cx.to(device)
         self.ac_hx = self.ac_hx.to(device)
@@ -113,9 +122,15 @@ class Agent(nn.Module):
         previous_reward_tensor = previous_reward_tensor.to(device)
         goal_grid_code_tensor = goal_grid_code_tensor.to(device)
 
-        visual_feature_map, reconstruction = self.vision_module(obs_tensor)
-        recons_loss = self.vision_module.reconstruction_loss(obs_tensor,
-                                                             reconstruction)
+        result = self.vision_module(obs_tensor)
+        visual_feature_map = result[0]
+        vision_loss = self.vision_module.loss(obs_tensor, result)
+
+        if self.visual_feature_prediction is not None:
+            pim_loss = self.path_integration_module.loss(visual_feature_map,
+                                                         self.visual_feature_prediction)
+        else:
+            pim_loss = torch.zeros(1, device=device)
 
         v1, v2, dist, (self.ac_hx, self.ac_cx) = self.actor_critic_module(
             visual_feature_map=visual_feature_map,
@@ -133,7 +148,7 @@ class Agent(nn.Module):
         action_embedding = self.encode_action(action)
 
         # Update agent's location and head direction
-        self.current_grid_code, (
+        self.current_grid_code, self.visual_feature_prediction, (
             self.pim_hx, self.pim_cx) = self.path_integration_module(
             visual_feature_map,
             action_embedding,
@@ -148,7 +163,8 @@ class Agent(nn.Module):
             entropy=entropy,
             v1=v1,
             v2=v2,
-            reconstruction_loss=recons_loss.unsqueeze(0)
+            vision_loss=vision_loss.view(1),
+            pim_loss=pim_loss.view(1),
         )
 
         return action
@@ -162,7 +178,7 @@ class Agent(nn.Module):
         # Setup device for inputs
         device = self.get_device()
 
-        previous_action_embedding, current_grid_code, (pim_hx, pim_cx), (
+        previous_action_embedding, current_grid_code, _, (pim_hx, pim_cx), (
             ac_hx, ac_cx) = context
         previous_action_embedding = previous_action_embedding.to(device)
         current_grid_code = current_grid_code.to(device)
@@ -175,7 +191,7 @@ class Agent(nn.Module):
 
         # Forward pass without gradients
         with torch.no_grad():
-            visual_feature_map, reconstruction = self.vision_module(obs_tensor)
+            visual_feature_map = self.vision_module(obs_tensor)[0]
 
             v1, v2, dist, (ac_hx, ac_cx) = self.actor_critic_module(
                 visual_feature_map=visual_feature_map,
@@ -197,11 +213,12 @@ class Agent(nn.Module):
                      discount_factor,
                      use_gae=True,
                      tau=0.95,
-                     value_loss_coef=1,
-                     policy_loss_coef=1,
-                     entropy_reg_coef=1,
-                     grid_layer_wreg_loss_coef=1,
-                     recons_loss_coef=1,
+                     value_loss_coef=1.0,
+                     policy_loss_coef=1.0,
+                     entropy_reg_coef=1.0,
+                     grid_layer_wreg_loss_coef=1.0,
+                     vision_loss_coef=1.0,
+                     pim_loss_coef=1.0
                      ):
         device = self.get_device()
 
@@ -211,13 +228,14 @@ class Agent(nn.Module):
         batch_return = torch.tensor(returns, dtype=torch.float32).unsqueeze(
             0).to(device)
 
-        # all tensors have shape of (T, 1)
+        # All tensors have shape of (T, 1)
         # MSE loss against Bellman backup
         (batch_log_probs,
          batch_entropy,
          batch_v1,
          batch_v2,
-         batch_reconstruction_loss) = self.train_buffer.data()
+         batch_vision_loss,
+         batch_pim_loss) = self.train_buffer.data()
 
         loss_v1 = (batch_return - batch_v1).pow(2).mean()
         loss_v2 = (batch_return - batch_v2).pow(2).mean()
@@ -243,22 +261,26 @@ class Agent(nn.Module):
         # Entropy-regularization
         loss_entropy = -entropy_reg_coef * batch_entropy.mean()
 
-        # weight regularization loss
-        loss_grid_l2 = self.path_integration_module.l2_loss() * grid_layer_wreg_loss_coef
+        # Vision loss
+        loss_vision = vision_loss_coef * batch_vision_loss.sum()
 
-        # reconstruction loss
-        loss_recons = recons_loss_coef * batch_reconstruction_loss.sum()
+        # Path integration losses
+        # Weight regularization loss
+        loss_grid_l2 = grid_layer_wreg_loss_coef * self.path_integration_module.l2_loss()
+        # Prediction loss
+        loss_pim = pim_loss_coef * batch_pim_loss.sum()
 
-        # total loss
-        loss = loss_v + loss_pi + loss_entropy + loss_grid_l2 + loss_recons
+        # Total loss
+        loss = loss_v + loss_pi + loss_entropy + loss_vision + loss_grid_l2 + loss_pim
 
         # Useful info for logging
         info = dict(
             LossV=loss_v.detach().cpu().numpy(),
             LossPi=loss_pi.detach().cpu().numpy(),
             LossEntropy=loss_entropy.detach().cpu().numpy(),
+            LossVision=loss_vision.detach().cpu().numpy(),
             LossGridL2=loss_grid_l2.detach().cpu().numpy(),
-            LossRecons=loss_recons.detach().cpu().numpy(),
+            LossPIM=loss_pim.detach().cpu().numpy(),
             Value=batch_value.detach().cpu().numpy(),
             LogPi=batch_log_probs.detach().cpu().numpy(),
         )
@@ -266,7 +288,7 @@ class Agent(nn.Module):
         return loss, info
 
     def act(self, obs, previous_reward, goal_grid_code, deterministic=False):
-        # all tensors must be provided in batches
+        # All tensors must be provided in batches
         device = self.get_device()
 
         self.send_context_to(device)
@@ -299,7 +321,7 @@ class Agent(nn.Module):
             action_embedding = self.encode_action(action)
 
             # Update agent's location and head direction
-            self.current_grid_code, (self.pim_hx, self.pim_cx) = \
+            self.current_grid_code, _, (self.pim_hx, self.pim_cx) = \
                 self.path_integration_module(visual_feature_map,
                                              action_embedding,
                                              (self.pim_hx, self.pim_cx))
@@ -321,7 +343,7 @@ def make_agent(env,
     act_dim = env.action_space.n
 
     # vision_module = CapsuleVisionModule(input_shape=image_shape)
-    vision_module = CNNVisionModule(input_shape=image_shape)
+    vision_module = MockVisionModule(input_shape=image_shape)
     path_integration_module = PathIntegrationModule(
         visual_feature_size=vision_module.output_shape[0],
         action_embedding_size=act_dim,

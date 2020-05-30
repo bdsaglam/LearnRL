@@ -26,6 +26,7 @@ setup(
         'seaborn',
         'torch',
         'torchvision',
+        'torch_vqvae',
         'tqdm'
     ],
     description="Teaching tools for introducing people to deep RL.",
