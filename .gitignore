@@ -1,7 +1,8 @@
 run.sh
 snippets.sh
 
-/data
+data/
+notebooks/
 
 # PyTorch Lightning
 *lightning_logs/

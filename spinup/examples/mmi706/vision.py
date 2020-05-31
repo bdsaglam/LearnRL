@@ -84,12 +84,12 @@ class VQVAEVisionModule(nn.Module):
         self.vqvae = vqvae
 
         with torch.no_grad():
-            image = torch.rand(1, vqvae.input_shape)
-            self.output_shape = self.forward(image).squeeze(0).shape
+            image = torch.rand(1, *vqvae.input_shape)
+            self.output_shape = self.forward(image)[0].squeeze(0).shape
 
     def forward(self, image):
         batch_size = image.shape[0]
-        res = self.vqvae.encode(image)
+        res = self.vqvae(image)
         return res.quantized.view(batch_size, -1), res.vq_loss, res.rec
 
     def loss(self, image, result):
@@ -98,7 +98,7 @@ class VQVAEVisionModule(nn.Module):
         return rec_loss + vq_loss
 
 
-def make_vision_module(model_type, checkpoint_filepath, device):
+def make_vision_module(model_type, checkpoint_filepath, device=torch.device('cpu')):
     if model_type == 'VQVAE':
         vqvae = torch.load(checkpoint_filepath, map_location=device)
         return VQVAEVisionModule(vqvae)
