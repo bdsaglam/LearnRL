@@ -221,13 +221,13 @@ if __name__ == '__main__':
     cudnn.benchmark = False
 
     parser = ArgumentParser()
+    parser.add_argument('--vision_module_checkpoint_file', type=str, required=True)
     parser.add_argument('--hparams_file', type=str, default=None)
     parser = Trainer.add_argparse_args(parser)
     args = parser.parse_args()
 
     # make vision module
-    vision_module_checkpoint = "/Users/bdsaglam/PycharmProjects/LearnRL/data/checkpoints/vqvae.pt"
-    vision_module = make_vision_module('VQVAE', vision_module_checkpoint)
+    vision_module = make_vision_module('VQVAE', args.vision_module_checkpoint_file)
 
     # prepare hparams
     hparams_file = pathlib.Path(args.hparams_file)
@@ -240,6 +240,7 @@ if __name__ == '__main__':
 
     # prepare trainer params
     trainer_params = vars(args)
+    del trainer_params['vision_module_checkpoint_file']
     del trainer_params['hparams_file']
     runner = Trainer(**trainer_params)
 
