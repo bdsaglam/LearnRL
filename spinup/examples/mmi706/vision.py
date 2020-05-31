@@ -49,9 +49,9 @@ class VQVAEVisionModule(nn.Module):
         return rec_loss + vq_loss
 
 
-def make_vision_module(model_type, checkpoint_filepath, device=torch.device('cpu')):
+def make_vision_module(model_type, checkpoint_filepath):
     if model_type == 'VQVAE':
-        vqvae = torch.load(checkpoint_filepath, map_location=device)
+        vqvae = torch.load(checkpoint_filepath)
         return VQVAEVisionModule(vqvae)
 
     raise ValueError("Unexpected model type")

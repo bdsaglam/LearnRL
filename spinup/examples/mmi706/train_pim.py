@@ -69,11 +69,10 @@ class PIMDataset(Dataset):
 
 
 class PIMExperiment(LightningModule):
-    def __init__(self, hparams) -> None:
+    def __init__(self, vision_module, hparams) -> None:
         super().__init__()
 
-        self.vision_module = make_vision_module('VQVAE',
-                                                hparams.vision_module_checkpoint)
+        self.vision_module = vision_module
         hparams.model['visual_feature_size'] = self.vision_module.output_shape[0]
 
         self.model = PathIntegrationModule(**hparams.model)
@@ -229,7 +228,11 @@ if __name__ == '__main__':
     # prepare hparams
     hparams_file = pathlib.Path(args.hparams_file)
     hparams = yaml.safe_load(hparams_file.read_text())
-    experiment = PIMExperiment(Namespace(**hparams))
+    vision_module = make_vision_module('VQVAE', hparams.vision_module_checkpoint)
+    experiment = PIMExperiment(
+        vision_module=vision_module,
+        hparams=Namespace(**hparams),
+    )
 
     # prepare trainer params
     trainer_params = vars(args)
