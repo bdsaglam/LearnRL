@@ -4,6 +4,7 @@ from argparse import ArgumentParser, Namespace
 import skimage.io
 import torch
 import torch.nn.functional as F
+import torchvision
 import yaml
 from pytorch_lightning import LightningModule, Trainer, seed_everything
 from torch.backends import cudnn
@@ -146,13 +147,48 @@ class PIMExperiment(LightningModule):
 
         out = dict(val_loss=loss)
         if batch_idx == 0:
-            out['vfm'] = vfm
-            out['pvfm'] = pvfm
+            out['images'] = image[:, 0]
+            out['actions'] = action[:, 0]
         return out
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
+
+        # log predictions
+        images = outputs[0]['images']
+        actions = outputs[0]['actions']
+        self.simulate_episode(images, actions)
+
         return {'val_loss': avg_val_loss}
+
+    def simulate_episode(self, images, actions):  # (T, C, H, W), (T, A)
+        n_timesteps = images.shape[0]
+        encoding_shape = self.vision_module.vqvae.output_shapes['quantized']
+
+        recs = []
+        precs = []
+        hx, cx = self.model.initial_hidden_state()
+        for i in range(n_timesteps):
+            image = images[i].unsqueeze(0)  # (1, C, H, W)
+            action = actions[i].unsqueeze(0)  # (1, A)
+            with torch.no_grad():
+                vfm = self.vision_module(image)[0]  # (1, F)
+            _, pvfm, (hx, cx) = self.model(vfm, action, (hx, cx))
+
+            with torch.no_grad():
+                rec = self.vision_module.vqvae.decode(vfm.view(1, *encoding_shape))
+                prec = self.vision_module.vqvae.decode(pvfm.view(1, *encoding_shape))
+
+            recs.append(rec)
+            precs.append(prec)
+
+        episode_rec = torch.cat(recs, 0)
+        episode_prec = torch.cat(precs, 0)
+        grid = torchvision.utils.make_grid(
+            torch.cat([images, episode_rec, episode_prec]),
+            nrow=n_timesteps, pad_value=0, padding=1,
+        )
+        self.logger.experiment.add_image('episode', grid, self.current_epoch)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(),
