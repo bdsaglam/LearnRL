@@ -109,13 +109,15 @@ class PIMExperiment(LightningModule):
         hx, cx = self.model.initial_hidden_state()
         hx = hx.repeat(batch_size, 1)
         cx = cx.repeat(batch_size, 1)
+        pvfm = None
         for i in range(n_timesteps):
             with torch.no_grad():
                 vfm = self.vision_module(image[i])[0]  # (B, F)
             a = action[i]  # (B, A)
             m = mask[i].unsqueeze(1)  # (B, 1)
-            grid_activations, pvfm, (hx, cx) = self.model(vfm, a, (hx, cx))
-            loss += self.model.loss(vfm * m, pvfm * m)
+            if pvfm is not None:
+                loss += self.model.loss(vfm * m, pvfm * m)
+            _, pvfm, (hx, cx) = self.model(vfm, a, (hx, cx))
 
         log = dict(
             loss=loss.detach(),
@@ -136,13 +138,15 @@ class PIMExperiment(LightningModule):
         hx, cx = self.model.initial_hidden_state()
         hx = hx.repeat(batch_size, 1)
         cx = cx.repeat(batch_size, 1)
+        pvfm = None
         for i in range(n_timesteps):
             with torch.no_grad():
                 vfm = self.vision_module(image[i])[0]  # (B, F)
             a = action[i]  # (B, A)
             m = mask[i].unsqueeze(1)  # (B, 1)
-            grid_activations, pvfm, (hx, cx) = self.model(vfm, a, (hx, cx))
-            loss += self.model.loss(vfm * m, pvfm * m)
+            if pvfm is not None:
+                loss += self.model.loss(vfm * m, pvfm * m)
+            _, pvfm, (hx, cx) = self.model(vfm, a, (hx, cx))
 
         out = dict(val_loss=loss)
         if batch_idx == 0:
@@ -165,7 +169,8 @@ class PIMExperiment(LightningModule):
         encoding_shape = self.vision_module.vqvae.output_shapes['quantized']
 
         recs = []
-        precs = []
+        precs = [torch.zeros_like(images[0].unsqueeze(0))]
+
         hx, cx = self.model.initial_hidden_state()
         for i in range(n_timesteps):
             image = images[i].unsqueeze(0)  # (1, C, H, W)
@@ -180,6 +185,8 @@ class PIMExperiment(LightningModule):
 
             recs.append(rec)
             precs.append(prec)
+
+        precs.pop()
 
         episode_rec = torch.cat(recs, 0)
         episode_prec = torch.cat(precs, 0)
