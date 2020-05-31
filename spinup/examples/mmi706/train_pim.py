@@ -225,10 +225,14 @@ if __name__ == '__main__':
     parser = Trainer.add_argparse_args(parser)
     args = parser.parse_args()
 
+    # make vision module
+    vision_module_checkpoint = "/Users/bdsaglam/PycharmProjects/LearnRL/data/checkpoints/vqvae.pt"
+    vision_module = make_vision_module('VQVAE', vision_module_checkpoint)
+
     # prepare hparams
     hparams_file = pathlib.Path(args.hparams_file)
     hparams = yaml.safe_load(hparams_file.read_text())
-    vision_module = make_vision_module('VQVAE', hparams.vision_module_checkpoint)
+
     experiment = PIMExperiment(
         vision_module=vision_module,
         hparams=Namespace(**hparams),

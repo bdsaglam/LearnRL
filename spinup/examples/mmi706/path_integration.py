@@ -35,13 +35,19 @@ class PathIntegrationModule(nn.Module):
         prediction = self.predictor(grid_activations)
         return grid_activations, prediction, (hx, cx)
 
+    def get_device(self):
+        return self.grid_layer.weight.device
+
     def initial_hidden_state(self):
-        hx = torch.zeros(1, self.lstm_cell.hidden_size, dtype=torch.float32)
+        device = self.get_device()
+
+        hx = torch.zeros(1, self.lstm_cell.hidden_size, device=device)
         cx = torch.zeros_like(hx)
         return hx, cx
 
     def initial_grid_code(self):
-        return torch.zeros(1, self.grid_layer_size, dtype=torch.float32)
+        device = self.get_device()
+        return torch.zeros(1, self.grid_layer_size, device=device)
 
     def l2_loss(self):
         return self.grid_layer.weight.norm(2)
