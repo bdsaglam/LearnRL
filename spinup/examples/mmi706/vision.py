@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from capsnet import CapsNet
 
 
 class MockVisionModule(nn.Module):
@@ -31,53 +29,6 @@ class MockVisionModule(nn.Module):
         return torch.zeros_like(image)
 
 
-class CapsuleVisionModule(nn.Module):
-    def __init__(self,
-                 input_shape,
-                 cnn_out_channels=256,
-                 cnn_kernel_size=9,
-                 cnn_stride=1,
-                 pc_num_capsules=8,
-                 pc_out_channels=32,
-                 pc_kernel_size=9,
-                 pc_stride=2,
-                 obj_num_capsules=10,
-                 obj_out_channels=16
-                 ):
-        super().__init__()
-        self.network = CapsNet(
-            input_shape,
-            cnn_out_channels=cnn_out_channels,
-            cnn_kernel_size=cnn_kernel_size,
-            cnn_stride=cnn_stride,
-            pc_num_capsules=pc_num_capsules,
-            pc_out_channels=pc_out_channels,
-            pc_kernel_size=pc_kernel_size,
-            pc_stride=pc_stride,
-            obj_num_capsules=obj_num_capsules,
-            obj_out_channels=obj_out_channels
-        )
-
-        with torch.no_grad():
-            image = torch.rand(1, *input_shape)
-            obj_vectors, reconstruction, masks = self.network(image)
-            self.output_shape = obj_vectors.squeeze(0).view(-1).shape
-
-    def forward(self, image):
-        batch_size = image.shape[0]
-        obj_vectors, reconstruction, masks = self.network(image)
-        return obj_vectors.view(batch_size, -1), reconstruction
-
-    def loss(self, image, result):
-        batch_size = image.shape[0]
-        _, reconstruction = result
-        loss = F.mse_loss(
-            reconstruction.view(batch_size, -1),
-            image.reshape(batch_size, -1)
-        )
-        return loss
-
-
 class VQVAEVisionModule(nn.Module):
     def __init__(self, vqvae):
         super().__init__()
@@ -103,5 +54,4 @@ def make_vision_module(model_type, checkpoint_filepath, device=torch.device('cpu
         vqvae = torch.load(checkpoint_filepath, map_location=device)
         return VQVAEVisionModule(vqvae)
 
-    if model_type == 'Capsule':
-        return torch.load(checkpoint_filepath, map_location=device)
+    raise ValueError("Unexpected model type")

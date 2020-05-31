@@ -8,7 +8,7 @@ from spinup.core.bellman import calculate_returns, \
     generalized_advantage_estimate
 from spinup.examples.mmi706.actor_critic import ActorCriticModule
 from spinup.examples.mmi706.path_integration import PathIntegrationModule
-from spinup.examples.mmi706.vision import MockVisionModule, CapsuleVisionModule
+from spinup.examples.mmi706.vision import MockVisionModule
 from spinup.utils import nn_utils
 
 
@@ -42,7 +42,7 @@ class TrainBuffer:
 
 class Agent(nn.Module):
     def __init__(self,
-                 vision_module: (MockVisionModule, CapsuleVisionModule),
+                 vision_module,
                  path_integration_module: PathIntegrationModule,
                  actor_critic_module: ActorCriticModule
                  ):
@@ -342,7 +342,6 @@ def make_agent(env,
     image_shape = env.observation_space.shape
     act_dim = env.action_space.n
 
-    # vision_module = CapsuleVisionModule(input_shape=image_shape)
     vision_module = MockVisionModule(input_shape=image_shape)
     path_integration_module = PathIntegrationModule(
         visual_feature_size=vision_module.output_shape[0],
