@@ -6,17 +6,17 @@ from torch.nn import functional as F
 class PathIntegrationModule(nn.Module):
     def __init__(self,
                  visual_feature_size,
-                 action_embedding_size,
+                 action_space_dim,
                  lstm_hidden_size=256,
                  grid_layer_size=256,
                  grid_layer_dropout_rate=0.5):
         super().__init__()
         self.visual_feature_size = visual_feature_size
-        self.action_embedding_size = action_embedding_size
+        self.action_space_dim = action_space_dim
         self.grid_layer_size = grid_layer_size
 
         self.lstm_cell = nn.LSTMCell(
-            visual_feature_size + action_embedding_size,
+            visual_feature_size + action_space_dim,
             hidden_size=lstm_hidden_size)
         self.grid_layer = nn.Linear(lstm_hidden_size, grid_layer_size,
                                     bias=False)

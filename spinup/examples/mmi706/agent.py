@@ -89,7 +89,7 @@ class Agent(nn.Module):
          (self.ac_hx, self.ac_cx)) = context
 
     def encode_action(self, action=None):
-        act_dim = self.actor_critic_module.action_embedding_size
+        act_dim = self.actor_critic_module.action_space_dim
         if action is None:
             return torch.zeros((1, act_dim), dtype=torch.float32)
 
@@ -346,7 +346,7 @@ def make_agent(env,
     vision_module = MockVisionModule(input_shape=image_shape)
     path_integration_module = PathIntegrationModule(
         visual_feature_size=vision_module.output_shape[0],
-        action_embedding_size=act_dim,
+        action_space_dim=act_dim,
         lstm_hidden_size=pim_lstm_hidden_size,
         grid_layer_size=grid_layer_size,
         grid_layer_dropout_rate=grid_layer_dropout_rate
@@ -354,7 +354,7 @@ def make_agent(env,
     actor_critic_module = ActorCriticModule(
         visual_feature_size=vision_module.output_shape[0],
         grid_code_size=path_integration_module.output_shape[0],
-        action_embedding_size=act_dim,
+        action_space_dim=act_dim,
         lstm_hidden_size=ac_lstm_hidden_size,
         actor_hidden_sizes=list(actor_hidden_sizes),
         critic_hidden_sizes=list(critic_hidden_sizes)

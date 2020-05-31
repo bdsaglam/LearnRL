@@ -11,18 +11,18 @@ class ActorCriticModule(nn.Module):
     def __init__(self,
                  visual_feature_size,
                  grid_code_size,
-                 action_embedding_size,
+                 action_space_dim,
                  lstm_hidden_size,
                  actor_hidden_sizes: List[int],
                  critic_hidden_sizes: List[int]):
         super().__init__()
 
-        self.action_embedding_size = action_embedding_size
+        self.action_space_dim = action_space_dim
 
-        input_size = 2 * grid_code_size + visual_feature_size + action_embedding_size + 1  # 1 for reward
+        input_size = 2 * grid_code_size + visual_feature_size + action_space_dim + 1  # 1 for reward
         self.lstm_cell = nn.LSTMCell(input_size, hidden_size=lstm_hidden_size)
         self.actor = MLPCategoricalActor(lstm_hidden_size,
-                                         action_embedding_size,
+                                         action_space_dim,
                                          hidden_sizes=actor_hidden_sizes)
         self.critic1 = MLPVFunction(lstm_hidden_size,
                                     hidden_sizes=critic_hidden_sizes)

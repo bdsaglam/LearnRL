@@ -103,7 +103,7 @@ class PIMExperiment(LightningModule):
 
         image = image.permute(1, 0, 2, 3, 4)  # (T, B, C, H, W)
         action = action.permute(1, 0)  # (T, B)
-        action = F.one_hot(action, num_classes=self.model.action_embedding_size).float()  # (T, B, A)
+        action = F.one_hot(action, num_classes=self.model.action_space_dim).float()  # (T, B, A)
         mask = mask.permute(1, 0)  # (T, B)
 
         loss = 0
@@ -130,7 +130,7 @@ class PIMExperiment(LightningModule):
 
         image = image.permute(1, 0, 2, 3, 4)  # (T, B, C, H, W)
         action = action.permute(1, 0)  # (T, B)
-        action = F.one_hot(action, num_classes=self.model.action_embedding_size).float()  # (T, B, A)
+        action = F.one_hot(action, num_classes=self.model.action_space_dim).float()  # (T, B, A)
         mask = mask.permute(1, 0)  # (T, B)
 
         loss = 0
