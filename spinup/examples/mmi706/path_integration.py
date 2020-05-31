@@ -2,6 +2,18 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from spinup.utils.nn_ext import MLP
+
+
+class GridPredictor(nn.Module):
+    def __init__(self, dim_grid, dim_feature_map, dims_hidden=tuple()):
+        super().__init__()
+        self.fcs = MLP(sizes=[dim_grid, *dims_hidden, dim_feature_map],
+                       activate_final=False)
+
+    def forward(self, feature_map, grid_activation):
+        return feature_map + self.fcs(grid_activation)
+
 
 class PathIntegrationModule(nn.Module):
     def __init__(self,
@@ -9,7 +21,8 @@ class PathIntegrationModule(nn.Module):
                  action_space_dim,
                  lstm_hidden_size=256,
                  grid_layer_size=256,
-                 grid_layer_dropout_rate=0.5):
+                 grid_layer_dropout_rate=0.5,
+                 predictor_hidden_sizes=tuple()):
         super().__init__()
         self.visual_feature_size = visual_feature_size
         self.action_space_dim = action_space_dim
@@ -21,8 +34,13 @@ class PathIntegrationModule(nn.Module):
         self.grid_layer = nn.Linear(lstm_hidden_size, grid_layer_size,
                                     bias=False)
         self.dropout = nn.Dropout(grid_layer_dropout_rate)
-        self.predictor = nn.Linear(grid_layer_size, visual_feature_size)
-        self.output_shape = (grid_layer_size,)
+        self.predictor = GridPredictor(dim_grid=grid_layer_size,
+                                       dim_feature_map=visual_feature_size,
+                                       dims_hidden=predictor_hidden_sizes)
+        self.output_shapes = dict(
+            grid_activation=grid_layer_size,
+            visual_feature_prediction=visual_feature_size,
+        )
 
     def forward(self, visual_feature_map, action_embedding, hidden_state):
         assert len(visual_feature_map.shape) == 2
@@ -32,8 +50,8 @@ class PathIntegrationModule(nn.Module):
         x = torch.cat((visual_feature_map, action_embedding), 1)
         hx, cx = self.lstm_cell(x, (hx, cx))
         grid_activations = self.dropout(self.grid_layer(hx))
-        prediction = self.predictor(grid_activations)
-        return grid_activations, prediction, (hx, cx)
+        predicted_visual_feature_map = self.predictor(visual_feature_map, grid_activations)
+        return grid_activations, predicted_visual_feature_map, (hx, cx)
 
     def get_device(self):
         return self.grid_layer.weight.device
