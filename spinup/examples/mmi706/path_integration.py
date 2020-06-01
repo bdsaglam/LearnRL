@@ -6,13 +6,13 @@ from spinup.utils.nn_ext import MLP
 
 
 class GridPredictor(nn.Module):
-    def __init__(self, dim_grid, dim_feature_map, dims_hidden=tuple()):
+    def __init__(self, dim_in, dim_out, dims_hidden=tuple()):
         super().__init__()
-        self.fcs = MLP(sizes=[dim_grid, *dims_hidden, dim_feature_map],
+        self.fcs = MLP(sizes=[dim_in, *dims_hidden, dim_out],
                        activate_final=False)
 
-    def forward(self, feature_map, grid_activation):
-        return feature_map + self.fcs(grid_activation)
+    def forward(self, x):
+        return self.fcs(x)
 
 
 class PathIntegrationModule(nn.Module):
@@ -34,8 +34,8 @@ class PathIntegrationModule(nn.Module):
         self.grid_layer = nn.Linear(lstm_hidden_size, grid_layer_size,
                                     bias=False)
         self.dropout = nn.Dropout(grid_layer_dropout_rate)
-        self.predictor = GridPredictor(dim_grid=grid_layer_size,
-                                       dim_feature_map=visual_feature_size,
+        self.predictor = GridPredictor(grid_layer_size,
+                                       visual_feature_size,
                                        dims_hidden=predictor_hidden_sizes)
         self.output_shapes = dict(
             grid_activation=grid_layer_size,
@@ -50,7 +50,7 @@ class PathIntegrationModule(nn.Module):
         x = torch.cat((visual_feature_map, action_embedding), 1)
         hx, cx = self.lstm_cell(x, (hx, cx))
         grid_activations = self.dropout(self.grid_layer(hx))
-        predicted_visual_feature_map = self.predictor(visual_feature_map, grid_activations)
+        predicted_visual_feature_map = self.predictor(grid_activations)
         return grid_activations, predicted_visual_feature_map, (hx, cx)
 
     def get_device(self):
