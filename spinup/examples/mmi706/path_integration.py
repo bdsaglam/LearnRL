@@ -38,8 +38,8 @@ class PathIntegrationModule(nn.Module):
                                        visual_feature_size,
                                        dims_hidden=predictor_hidden_sizes)
         self.output_shapes = dict(
-            grid_activation=grid_layer_size,
-            visual_feature_prediction=visual_feature_size,
+            grid_activation=(grid_layer_size,),
+            visual_feature_prediction=(visual_feature_size,),
         )
 
     def forward(self, visual_feature_map, action_embedding, hidden_state):

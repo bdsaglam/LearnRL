@@ -17,3 +17,8 @@ def count_vars(module):
 
 def conv_output_size(in_size, kernel, stride=1, padding=0):
     return (in_size - kernel + 2 * padding) // stride + 1
+
+
+def trainable(module, requires_grad):
+    for p in module.parameters():
+        p.requires_grad = requires_grad

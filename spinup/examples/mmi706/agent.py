@@ -8,8 +8,9 @@ from spinup.core.bellman import calculate_returns, \
     generalized_advantage_estimate
 from spinup.examples.mmi706.actor_critic import ActorCriticModule
 from spinup.examples.mmi706.path_integration import PathIntegrationModule
-from spinup.examples.mmi706.vision import MockVisionModule
+from spinup.examples.mmi706.vision import MockVisionModule, make_vision_module
 from spinup.utils import nn_utils
+from spinup.utils.nn_utils import trainable
 
 
 class TrainBuffer:
@@ -18,15 +19,13 @@ class TrainBuffer:
         self.entropy = []
         self.v1 = []
         self.v2 = []
-        self.vision_loss = []
         self.pim_loss = []
 
-    def store(self, log_prob, entropy, v1, v2, vision_loss, pim_loss):
+    def store(self, log_prob, entropy, v1, v2, pim_loss):
         self.log_probs.append(log_prob)
         self.entropy.append(entropy)
         self.v1.append(v1)
         self.v2.append(v2)
-        self.vision_loss.append(vision_loss)
         self.pim_loss.append(pim_loss)
 
     def data(self):
@@ -34,10 +33,8 @@ class TrainBuffer:
         batch_entropy = torch.cat(self.entropy, 0)
         batch_v1 = torch.cat(self.v1, 0)
         batch_v2 = torch.cat(self.v2, 0)
-        batch_vision_loss = torch.cat(self.vision_loss, 0)
         batch_pim_loss = torch.cat(self.pim_loss, 0)
-        return (batch_log_probs, batch_entropy, batch_v1, batch_v2,
-                batch_vision_loss, batch_pim_loss)
+        return (batch_log_probs, batch_entropy, batch_v1, batch_v2, batch_pim_loss)
 
 
 class Agent(nn.Module):
@@ -122,9 +119,8 @@ class Agent(nn.Module):
         previous_reward_tensor = previous_reward_tensor.to(device)
         goal_grid_code_tensor = goal_grid_code_tensor.to(device)
 
-        result = self.vision_module(obs_tensor)
-        visual_feature_map = result[0]
-        vision_loss = self.vision_module.loss(obs_tensor, result)
+        with torch.no_grad():
+            visual_feature_map = self.vision_module(obs_tensor)[0]
 
         if self.visual_feature_prediction is not None:
             pim_loss = self.path_integration_module.loss(visual_feature_map,
@@ -163,7 +159,6 @@ class Agent(nn.Module):
             entropy=entropy,
             v1=v1,
             v2=v2,
-            vision_loss=vision_loss.view(1),
             pim_loss=pim_loss.view(1),
         )
 
@@ -217,7 +212,6 @@ class Agent(nn.Module):
                      policy_loss_coef=1.0,
                      entropy_reg_coef=1.0,
                      grid_layer_wreg_loss_coef=1.0,
-                     vision_loss_coef=1.0,
                      pim_loss_coef=1.0
                      ):
         device = self.get_device()
@@ -234,7 +228,6 @@ class Agent(nn.Module):
          batch_entropy,
          batch_v1,
          batch_v2,
-         batch_vision_loss,
          batch_pim_loss) = self.train_buffer.data()
 
         loss_v1 = (batch_return - batch_v1).pow(2).mean()
@@ -261,9 +254,6 @@ class Agent(nn.Module):
         # Entropy-regularization
         loss_entropy = -entropy_reg_coef * batch_entropy.mean()
 
-        # Vision loss
-        loss_vision = vision_loss_coef * batch_vision_loss.sum()
-
         # Path integration losses
         # Weight regularization loss
         loss_grid_l2 = grid_layer_wreg_loss_coef * self.path_integration_module.l2_loss()
@@ -271,14 +261,13 @@ class Agent(nn.Module):
         loss_pim = pim_loss_coef * batch_pim_loss.sum()
 
         # Total loss
-        loss = loss_v + loss_pi + loss_entropy + loss_vision + loss_grid_l2 + loss_pim
+        loss = loss_v + loss_pi + loss_entropy + loss_grid_l2 + loss_pim
 
         # Useful info for logging
         info = dict(
             LossV=loss_v.detach().cpu().numpy(),
             LossPi=loss_pi.detach().cpu().numpy(),
             LossEntropy=loss_entropy.detach().cpu().numpy(),
-            LossVision=loss_vision.detach().cpu().numpy(),
             LossGridL2=loss_grid_l2.detach().cpu().numpy(),
             LossPIM=loss_pim.detach().cpu().numpy(),
             Value=batch_value.detach().cpu().numpy(),
@@ -302,7 +291,7 @@ class Agent(nn.Module):
             goal_grid_code = torch.tensor(goal_grid_code).float().to(device)
 
         with torch.no_grad():
-            visual_feature_map = self.vision_module(obs)
+            visual_feature_map = self.vision_module(obs)[0]
 
             v1, v2, dist, (self.ac_hx, self.ac_cx) = self.actor_critic_module(
                 visual_feature_map=visual_feature_map,
@@ -332,6 +321,7 @@ class Agent(nn.Module):
 
 
 def make_agent(env,
+               vision_model_checkpoint_filepath,
                pim_lstm_hidden_size=256,
                grid_layer_size=256,
                grid_layer_dropout_rate=0.5,
@@ -342,7 +332,9 @@ def make_agent(env,
     image_shape = env.observation_space.shape
     act_dim = env.action_space.n
 
-    vision_module = MockVisionModule(input_shape=image_shape)
+    vision_module = make_vision_module('VQVAE', vision_model_checkpoint_filepath)
+    trainable(vision_module, False)
+
     path_integration_module = PathIntegrationModule(
         visual_feature_size=vision_module.output_shape[0],
         action_space_dim=act_dim,
@@ -350,9 +342,10 @@ def make_agent(env,
         grid_layer_size=grid_layer_size,
         grid_layer_dropout_rate=grid_layer_dropout_rate
     )
+
     actor_critic_module = ActorCriticModule(
         visual_feature_size=vision_module.output_shape[0],
-        grid_code_size=path_integration_module.output_shape[0],
+        grid_code_size=path_integration_module.output_shapes['grid_activation'][0],
         action_space_dim=act_dim,
         lstm_hidden_size=ac_lstm_hidden_size,
         actor_hidden_sizes=list(actor_hidden_sizes),
