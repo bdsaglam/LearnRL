@@ -8,6 +8,7 @@ from spinup.wrappers import PyTorchImageWrapper
 def make_env(seed, max_episode_steps=1500):
     env = WestWorld(
         seed=seed,
+        room_size=2,
         obs_width=64,
         obs_height=64,
         max_episode_steps=max_episode_steps,

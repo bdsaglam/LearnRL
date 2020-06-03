@@ -7,19 +7,18 @@ from spinup.utils.logx import EpochLogger
 
 
 def evaluate_agent(
-        env_fn,
+        env,
         agent: Agent,
         deterministic=True,
         num_episodes=5,
         render=False,
         logger=None
 ):
-    assert env_fn is not None, \
+    assert env is not None, \
         "Environment not found!\n\n It looks like the environment wasn't saved, " + \
         "and we can't run the agent in it. :( \n\n Check out the readthedocs " + \
         "page on Experiment Outputs for how to handle this situation."
 
-    env = env_fn()
     assert env.spec.max_episode_steps > 0
 
     if logger is None:

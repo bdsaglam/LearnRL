@@ -223,7 +223,7 @@ def a2c(env_fn,
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossEntropy', average_only=True)
             logger.log_tabular('LossGridL2', average_only=True)
-            logger.log_tabular('LossRecons', average_only=True)
+            logger.log_tabular('LossPIM', average_only=True)
             logger.log_tabular('TotalEnvInteracts', total_interactions)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
@@ -262,6 +262,7 @@ def a2c(env_fn,
             plog(f'    Epoch {epoch}')
             break
 
+    torch.save(agent, str(logger.output_dir / 'agent.pt'))
     env.close()
 
 
