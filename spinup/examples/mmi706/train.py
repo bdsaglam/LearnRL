@@ -295,6 +295,7 @@ if __name__ == '__main__':
     parser.add_argument('--saved_model_file', '-f', type=str, default=None)
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--vm_checkpoint', type=str)
+    parser.add_argument('--pim_checkpoint', type=str, default=None)
 
     args = parser.parse_args()
 
@@ -327,7 +328,8 @@ if __name__ == '__main__':
     else:
         model = make_agent(
             env,
-            vision_model_checkpoint_filepath = args.vm_checkpoint,
+            vision_model_checkpoint_filepath=args.vm_checkpoint,
+            pim_checkpoint_filepath=args.pim_checkpoint,
             pim_lstm_hidden_size=32,
             grid_layer_size=32,
             grid_layer_dropout_rate=0.5,

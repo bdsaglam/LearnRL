@@ -2,13 +2,14 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
+from spinup.constants import DEVICE
 from torch import nn
 
 from spinup.core.bellman import calculate_returns, \
     generalized_advantage_estimate
 from spinup.examples.mmi706.actor_critic import ActorCriticModule
 from spinup.examples.mmi706.path_integration import PathIntegrationModule
-from spinup.examples.mmi706.vision import MockVisionModule, make_vision_module
+from spinup.examples.mmi706.vision import make_vision_module
 from spinup.utils import nn_utils
 from spinup.utils.nn_utils import trainable
 
@@ -322,6 +323,7 @@ class Agent(nn.Module):
 
 def make_agent(env,
                vision_model_checkpoint_filepath,
+               pim_checkpoint_filepath=None,
                pim_lstm_hidden_size=256,
                grid_layer_size=256,
                grid_layer_dropout_rate=0.5,
@@ -333,15 +335,18 @@ def make_agent(env,
     act_dim = env.action_space.n
 
     vision_module = make_vision_module('VQVAE', vision_model_checkpoint_filepath)
-    trainable(vision_module, False)
 
-    path_integration_module = PathIntegrationModule(
-        visual_feature_size=vision_module.output_shape[0],
-        action_space_dim=act_dim,
-        lstm_hidden_size=pim_lstm_hidden_size,
-        grid_layer_size=grid_layer_size,
-        grid_layer_dropout_rate=grid_layer_dropout_rate
-    )
+    trainable(vision_module, False)
+    if pim_checkpoint_filepath:
+        path_integration_module = torch.load(pim_checkpoint_filepath, map_location=DEVICE)
+    else:
+        path_integration_module = PathIntegrationModule(
+            visual_feature_size=vision_module.output_shape[0],
+            action_space_dim=act_dim,
+            lstm_hidden_size=pim_lstm_hidden_size,
+            grid_layer_size=grid_layer_size,
+            grid_layer_dropout_rate=grid_layer_dropout_rate
+        )
 
     actor_critic_module = ActorCriticModule(
         visual_feature_size=vision_module.output_shape[0],
